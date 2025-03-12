@@ -1,0 +1,38 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id        String    @id @default(uuid())
+  cpf       String    @unique
+  password  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  payslips  Payslip[]
+}
+
+model Payslip {
+  id        String    @id @default(uuid())
+  userId    String
+  year      Int
+  month     Int
+  fileUrl   String
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Admin {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  role      String    @default("counter") // "counter" para admin comum; "master" para admin master
+  createdAt DateTime  @default(now())
+}
