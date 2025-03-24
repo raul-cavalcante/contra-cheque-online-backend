@@ -7,6 +7,8 @@ import { uploadPayroll } from '../controllers/payrollController';
 import { authenticateAdmin } from '../middlewares/authMiddleware';
 import { contra_chequeController } from '../controllers/contra_chequeController';
 import { verifyToken } from '../utils/jwt';
+import { getAvailablePeriods } from '../controllers/getPeriods';
+
 
 export const mainRouter = Router()
 
@@ -21,6 +23,8 @@ mainRouter.get('/contra-cheques', verifyToken, contra_chequeController)
 
 //Login do administrador/contador
 mainRouter.post('/login/admin', loginAdmin);
+
+mainRouter.get('/yearMonth', verifyToken, getAvailablePeriods);
 
 //Upload de PDF/contra-cheques (requer autenticação de admin)
 mainRouter.post('/upload/payroll', authenticateAdmin , upload.single('file'), uploadPayroll);

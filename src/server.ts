@@ -10,9 +10,15 @@ server.use(cors())
 server.use(urlencoded({ extended: true }))
 server.use(express.json())
 
-const PORT = process.env.PORT || 3000
+server.use(cors({
+  origin: 'http://localhost:3000', // URL do seu frontend Next.js
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+const PORT = process.env.PORT || 3001
 server.listen(PORT, () => {
-  console.log(`Servidor rodando em: https://localhost:3000`)
+  console.log(`Servidor rodando em: https://localhost:3001`)
 })
 
 server.use(mainRouter)
