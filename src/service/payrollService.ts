@@ -26,7 +26,7 @@ export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month:
     }
 
     // Gera um nome de arquivo único para o PDF individual.
-    const fileName = `${year}-${month}-${cpf}-${Date.now()}.pdf`;
+    const fileName = `${year}-${month}-${cpf}.pdf`;
     const filePath = path.join(UPLOAD_DIR, fileName);
     await fs.promises.writeFile(filePath, pageBuffer);
 

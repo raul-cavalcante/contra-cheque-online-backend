@@ -18,7 +18,7 @@ server.use(cors({
 
 const PORT = process.env.PORT || 3001
 server.listen(PORT, () => {
-  console.log(`Servidor rodando em: https://localhost:3001`)
+  console.log(`Servidor rodando em: http://localhost:3001`)
 })
 
 server.use(mainRouter)
