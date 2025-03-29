@@ -16,6 +16,7 @@ export const getContraCheques = async (userId, month, year) => {
             month: true,
             year: true,
             fileUrl: true,
+            cpf: true,
         }
     })
     return contraCheques;

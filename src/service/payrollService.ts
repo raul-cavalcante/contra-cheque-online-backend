@@ -36,7 +36,8 @@ export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month:
         userId: user.id,
         year,
         month,
-        fileUrl: filePath
+        fileUrl: filePath,
+        cpf
       }
     });
   }

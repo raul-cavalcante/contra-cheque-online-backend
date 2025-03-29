@@ -25,6 +25,7 @@ model Payslip {
   month     Int
   fileUrl   String
   createdAt DateTime  @default(now())
+  cpf       String    @unique
 
   user      User      @relation(fields: [userId], references: [id])
 }
