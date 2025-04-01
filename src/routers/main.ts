@@ -30,6 +30,6 @@ mainRouter.get('/yearMonth', verifyToken, getAvailablePeriods);
 mainRouter.post('/upload/payroll', authenticateAdmin , upload.single('file'), uploadPayroll);
 
 //admin master
-mainRouter.get('/admins', authenticateAdmin , listAdminsController);
-mainRouter.post('/admins', authenticateAdmin , createAdminController);
-mainRouter.delete('/admins/:id', authenticateAdmin , deleteAdminController);
+mainRouter.get('/master', authenticateAdmin , listAdminsController);
+mainRouter.post('/master', authenticateAdmin , createAdminController);
+mainRouter.delete('/master/:id', authenticateAdmin , deleteAdminController);
