@@ -10,9 +10,11 @@ export const generateToken = (id: string) => {
 declare global {
   namespace Express {
     interface Request {
-      userId?: String;
+      userId?: any;
       month: Number;
-      year: Number;
+      year: any;
+      password: any;
+      id: any;
     }
   }
 }
@@ -33,7 +35,7 @@ export const verifyToken = async (req: ExtendedRequest, res: Response, next: Nex
         res.status(500).json({error: 'token inválido'});
         return
       }
-      req.userId = decoded.id;
+      req.userId = decoded.id; // Use req.userId para consistência
       next();
     }
   )

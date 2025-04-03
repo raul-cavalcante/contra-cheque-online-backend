@@ -4,4 +4,6 @@ export type ExtendedRequest = Request & {
     userId?: String;
     month: Number;
     year: Number;
+    password: Number;
+    id?: any;
   };

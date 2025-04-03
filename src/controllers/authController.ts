@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
-import { generateToken } from '../utils/jwt';
+import { generateToken, verifyToken } from '../utils/jwt';
 import {prisma} from '../utils/prisma';
-
 
 export const loginUser = async (req: Request, res: Response) => {
   const { cpf, password } = req.body;
@@ -38,3 +37,19 @@ export const loginAdmin = async (req: Request, res: Response) => {
   }
 };
 
+
+export const updatePassword = async (req: Request, res: Response) => {
+  const { newPassword } = req.body;
+
+  try {
+    const userId = req.userId; // Certifique-se de que req.userId está sendo populado pelo middleware de autenticação
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { password: newPassword },
+    });
+
+    res.json({ message: 'Senha atualizada com sucesso.', user });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
