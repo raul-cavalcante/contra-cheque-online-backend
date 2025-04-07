@@ -1,11 +1,9 @@
-// src/services/payrollService.ts
-import {prisma} from '../utils/prisma';
-import { extractPagesFromPDF, extractCPFAndNameFromPDFPage } from '../utils/pdfUtils';
-import { generateInitialPassword } from '../utils/cpfUtils';
+import { prisma } from '../utils/prisma';
+import { extractPagesFromPDF, extractCPFFromPDFPage } from '../utils/pdfUtils';
+import { generateInitialPassword, cleanCPF } from '../utils/cpfUtils';
+import { uploadToS3 } from '../utils/s3Utils';
 import fs from 'fs';
 import path from 'path';
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 
 export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month: number) => {
   const pages = await extractPagesFromPDF(fileBuffer);
@@ -13,22 +11,26 @@ export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month:
 
   for (let i = 0; i < totalPages; i++) {
     const pageBuffer = pages[i];
-    const { cpf } = await extractCPFAndNameFromPDFPage(pageBuffer);
+    const { cpf } = await extractCPFFromPDFPage(pageBuffer);
 
-    let user = await prisma.user.findUnique({ where: { cpf } });
+    // Limpa o CPF para garantir que está no formato correto
+    const cleanedCPF = cleanCPF(cpf);
+
+    let user = await prisma.user.findUnique({ where: { cpf: cleanedCPF } });
     if (!user) {
       user = await prisma.user.create({
         data: {
-          cpf,
-          password: generateInitialPassword(cpf)
-        }
+          cpf: cleanedCPF, // Armazena o CPF limpo no banco de dados
+          password: generateInitialPassword(cleanedCPF),
+        },
       });
     }
 
     // Gera um nome de arquivo único para o PDF individual.
-    const fileName = `${year}-${month}-${cpf}.pdf`;
-    const filePath = `uploads/${fileName}`;
-    await fs.promises.writeFile(path.join(UPLOAD_DIR, fileName), pageBuffer);
+    const fileName = `${year}-${month}-${cleanedCPF}.pdf`;
+
+    // Faz upload do arquivo para o S3.
+    const fileUrl = await uploadToS3(pageBuffer, fileName, 'application/pdf');
 
     // Registra o contra-cheque no banco de dados.
     await prisma.payslip.create({
@@ -36,9 +38,9 @@ export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month:
         userId: user.id,
         year,
         month,
-        fileUrl: filePath,
-        cpf
-      }
+        fileUrl, // Salva a URL do S3 no banco
+        cpf: cleanedCPF,
+      },
     });
   }
   return totalPages;

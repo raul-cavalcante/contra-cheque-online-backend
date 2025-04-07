@@ -1,10 +1,10 @@
 import { PDFDocument } from 'pdf-lib';
 import pdfParse from 'pdf-parse';
-
+import { uploadToS3 } from './s3Utils'; // Importa a função de upload para o S3
 
 export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
   const pdfDoc = await PDFDocument.load(fileBuffer);
-  const pages: Buffer[] = [];
+  const pages: Buffer[] = []; // Alterado para armazenar buffers das páginas
   const pageCount = pdfDoc.getPageCount();
 
   for (let i = 0; i < pageCount; i++) {
@@ -12,22 +12,22 @@ export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
     const [copiedPage] = await newPdf.copyPages(pdfDoc, [i]);
     newPdf.addPage(copiedPage);
     const newPdfBytes = await newPdf.save();
-    pages.push(Buffer.from(newPdfBytes));
+    pages.push(Buffer.from(newPdfBytes)); // Adiciona o buffer da página à lista
   }
-  return pages;
+  return pages; // Retorna os buffers das páginas
 };
 
+export const extractCPFFromPDFPage = async (pageBuffer: Buffer) => {
+  const pdfData = await pdfParse(pageBuffer);
+  const text = pdfData.text;
 
-export const extractCPFAndNameFromPDFPage = async (pageBuffer: Buffer) => {
-  const data = await pdfParse(pageBuffer);
-  const text = data.text;
+  // Regex para extrair o CPF (formato: 000.000.000-00)
+  const cpfMatch = text.match(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/);
+  const cpf = cpfMatch ? cpfMatch[0] : null;
 
-  const cpfRegex = /(\d{3}\.\d{3}\.\d{3}-\d{2})/;
-  const cpfMatch = text.match(cpfRegex);
-  if (!cpfMatch) {
-    throw new Error('CPF não encontrado na página');
+  if (!cpf) {
+    throw new Error('Não foi possível extrair o CPF da página.');
   }
-  const cpf = cpfMatch[0].replace(/\D/g, '');
 
-  return { cpf};
+  return { cpf };
 };
