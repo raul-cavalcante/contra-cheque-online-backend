@@ -15,10 +15,10 @@ console.log('S3 Configuração:', {
 export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
   const params = {
     Bucket: process.env.AWS_S3_BUCKET_NAME!,
-    Key: fileName, // Nome do arquivo no S3
-    Body: fileBuffer, // Conteúdo do arquivo
-    ContentType: mimeType, // Tipo MIME
-    ACL: 'public-read', // Permissão de leitura pública
+    Key: fileName,
+    Body: fileBuffer,
+    ContentType: mimeType,
+    ACL: 'public-read',
   };
 
   try {
