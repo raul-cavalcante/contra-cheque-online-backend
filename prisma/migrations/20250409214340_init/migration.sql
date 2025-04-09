@@ -44,3 +44,7 @@ CREATE UNIQUE INDEX "Admin_email_key" ON "Admin"("email");
 
 -- AddForeignKey
 ALTER TABLE "Payslip" ADD CONSTRAINT "Payslip_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Insert default master admin user
+INSERT INTO "Admin" ("id", "email", "password", "role", "createdAt") 
+VALUES (gen_random_uuid(), 'raulcavalcante.a@gmail.com', '@Raul546789', 'master', CURRENT_TIMESTAMP);
