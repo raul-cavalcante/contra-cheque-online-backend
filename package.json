@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "node --import=tsx --watch --env-file=.env ./src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "vercel-build": "npx prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
