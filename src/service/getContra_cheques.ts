@@ -2,7 +2,23 @@ import { ExtendedRequest } from "../types/types";
 import { prisma } from "../utils/prisma";
 import { Response } from "express";
 
-export const getContraCheques = async (userId, month, year) => {	
+interface ContraCheque {
+    id: string;
+    userId: string;
+    createdAt: Date;
+    month: number;
+    year: number;
+    fileUrl: string;
+    cpf: string;
+}
+
+interface Period {
+    userId: string;
+    month: number;
+    year: number;
+}
+
+export const getContraCheques = async (userId: string, month: number, year: number): Promise<ContraCheque[]> => {    
     const contraCheques = await prisma.payslip.findMany({
         where: {
             userId,
@@ -18,7 +34,7 @@ export const getContraCheques = async (userId, month, year) => {
             fileUrl: true,
             cpf: true,
         }
-    })
+    });
     return contraCheques;
 }
 
@@ -30,7 +46,7 @@ export const getContraCheques = async (userId, month, year) => {
  * e retorna as combinações distintas de "year" e "month".
  */
 
-export const getPeriodsService = async (userId, month, year) => {	
+export const getPeriodsService = async (userId: string, month: number, year: number): Promise<Period[]> => {    
     const contraCheques = await prisma.payslip.findMany({
         where: {
             userId,
@@ -42,6 +58,6 @@ export const getPeriodsService = async (userId, month, year) => {
             month: true,
             year: true,
         }
-    })
+    });
     return contraCheques;
 }
