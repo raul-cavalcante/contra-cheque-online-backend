@@ -15,7 +15,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
 
 server.use(cors({
-  origin: 'http://localhost:3000', // URL do seu frontend Next.js
+  origin: 'https://contra-cheque-online.vercel.app', // URL do seu frontend Next.js
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
