@@ -6,42 +6,53 @@ import fs from 'fs';
 import path from 'path';
 
 export const processPayrollPDF = async (fileBuffer: Buffer, year: number, month: number) => {
+  console.log(`Iniciando processamento do PDF para o ano ${year} e mês ${month}`);
   const pages = await extractPagesFromPDF(fileBuffer);
   const totalPages = pages.length;
+  console.log(`Total de páginas extraídas: ${totalPages}`);
 
   for (let i = 0; i < totalPages; i++) {
+    console.log(`Processando página ${i + 1} de ${totalPages}`);
     const pageBuffer = pages[i];
-    const { cpf } = await extractCPFFromPDFPage(pageBuffer);
+    try {
+      const { cpf } = await extractCPFFromPDFPage(pageBuffer);
+      console.log(`CPF extraído: ${cpf}`);
 
-    // Limpa o CPF para garantir que está no formato correto
-    const cleanedCPF = cleanCPF(cpf);
+      const cleanedCPF = cleanCPF(cpf);
+      console.log(`CPF limpo: ${cleanedCPF}`);
 
-    let user = await prisma.user.findUnique({ where: { cpf: cleanedCPF } });
-    if (!user) {
-      user = await prisma.user.create({
+      let user = await prisma.user.findUnique({ where: { cpf: cleanedCPF } });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            cpf: cleanedCPF,
+            password: generateInitialPassword(cleanedCPF),
+          },
+        });
+        console.log(`Usuário criado: ${user.id}`);
+      }
+
+      const fileName = `${year}-${month}-${cleanedCPF}.pdf`;
+      console.log(`Nome do arquivo gerado: ${fileName}`);
+
+      const fileUrl = await uploadToS3(pageBuffer, fileName, 'application/pdf');
+      console.log(`Arquivo enviado para o S3: ${fileUrl}`);
+
+      await prisma.payslip.create({
         data: {
-          cpf: cleanedCPF, // Armazena o CPF limpo no banco de dados
-          password: generateInitialPassword(cleanedCPF),
+          userId: user.id,
+          year,
+          month,
+          fileUrl,
+          cpf: cleanedCPF,
         },
       });
+      console.log(`Contra-cheque registrado no banco de dados para o usuário ${user.id}`);
+    } catch (error) {
+      console.error(`Erro ao processar a página ${i + 1}:`, error);
+      throw error;
     }
-
-    // Gera um nome de arquivo único para o PDF individual.
-    const fileName = `${year}-${month}-${cleanedCPF}.pdf`;
-
-    // Faz upload do arquivo para o S3.
-    const fileUrl = await uploadToS3(pageBuffer, fileName, 'application/pdf');
-
-    // Registra o contra-cheque no banco de dados.
-    await prisma.payslip.create({
-      data: {
-        userId: user.id,
-        year,
-        month,
-        fileUrl, // Salva a URL do S3 no banco
-        cpf: cleanedCPF,
-      },
-    });
   }
+  console.log(`Processamento concluído para ${totalPages} páginas.`);
   return totalPages;
 };
