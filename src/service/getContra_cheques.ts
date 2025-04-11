@@ -19,6 +19,10 @@ interface Period {
 }
 
 export const getContraCheques = async (userId: string, month: number, year: number): Promise<ContraCheque[]> => {    
+    if (isNaN(month) || isNaN(year)) {
+        throw new Error('Os valores de month e year devem ser números válidos.');
+    }
+
     const contraCheques = await prisma.payslip.findMany({
         where: {
             userId,
@@ -47,6 +51,10 @@ export const getContraCheques = async (userId: string, month: number, year: numb
  */
 
 export const getPeriodsService = async (userId: string, month: number, year: number): Promise<Period[]> => {    
+    if (isNaN(month) || isNaN(year)) {
+        throw new Error('Os valores de month e year devem ser números válidos.');
+    }
+
     const contraCheques = await prisma.payslip.findMany({
         where: {
             userId,
