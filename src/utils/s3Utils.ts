@@ -12,6 +12,9 @@ console.log('S3 Configuração:', {
   bucket: process.env.AWS_S3_BUCKET_NAME,
 });
 
+// Certifique-se de que o nome do bucket está correto
+process.env.AWS_S3_BUCKET_NAME = 'contra-cheque-pfd';
+
 // Função para verificar se o bucket existe
 const checkBucketExists = async (bucketName: string) => {
   try {
