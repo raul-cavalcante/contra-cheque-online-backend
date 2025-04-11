@@ -12,14 +12,28 @@ console.log('S3 Configuração:', {
   bucket: process.env.AWS_S3_BUCKET_NAME,
 });
 
+// Função para verificar se o bucket existe
+const checkBucketExists = async (bucketName: string) => {
+  try {
+    await s3.headBucket({ Bucket: bucketName }).promise();
+    console.log(`Bucket ${bucketName} verificado com sucesso.`);
+  } catch (error) {
+    console.error(`Erro ao verificar o bucket ${bucketName}:`, error);
+    throw new Error(`Bucket ${bucketName} não encontrado ou inacessível.`);
+  }
+};
+
 export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
+  const bucketName = process.env.AWS_S3_BUCKET_NAME!;
+
+  // Verifica se o bucket existe antes de fazer o upload
+  await checkBucketExists(bucketName);
+
   const params = {
-    Bucket: process.env.AWS_S3_BUCKET_NAME!,
+    Bucket: bucketName,
     Key: fileName,
     Body: fileBuffer,
     ContentType: mimeType,
-    // Removendo a propriedade ACL, pois o bucket não suporta ACLs
-    // ACL: 'public-read',
   };
 
   try {
