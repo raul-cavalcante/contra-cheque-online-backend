@@ -9,13 +9,13 @@ const server = express()
 
 server.use(helmet())
 server.use(cors())
-server.use(urlencoded({ extended: true }))
-server.use(express.json())
+server.use(urlencoded({ extended: true, limit: '50mb' })) // Aumenta o limite para 50MB
+server.use(express.json({ limit: '50mb' })) // Aumenta o limite para 50MB
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
 
 server.use(cors({
-  origin: 'https://contra-cheque-online.vercel.app', // URL do seu frontend Next.js
+  origin: 'https://contra-cheque-online.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
