@@ -12,7 +12,10 @@ import { getAvailablePeriods } from '../controllers/getPeriods';
 
 export const mainRouter = Router()
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // Limite de 50MB
+});
 
 mainRouter.get('/ping', pingController)
 

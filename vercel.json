@@ -11,5 +11,12 @@
       "src": "/(.*)",
       "dest": "src/server.ts"
     }
-  ]
+  ],
+  "functions": {
+    "limits": {
+      "maxDuration": 10,
+      "maxMemory": 1024
+    },
+    "maxLambdaSize": "50mb"
+  }
 }
