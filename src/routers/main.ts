@@ -29,7 +29,7 @@ mainRouter.put('/user', verifyToken, updatePassword);
 mainRouter.post('/login/admin', loginAdmin);
 
 //Upload de PDF/contra-cheques (requer autenticação de admin)
-mainRouter.post('/upload/payroll', authenticateAdmin , upload.array('file'), uploadPayroll);
+mainRouter.post('/upload/payroll', authenticateAdmin , upload.single('file'), uploadPayroll);
 
 //admin master
 mainRouter.get('/master', authenticateAdmin , listAdminsController);
