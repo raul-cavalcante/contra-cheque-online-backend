@@ -18,6 +18,7 @@ export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType:
     Key: fileName,
     Body: fileBuffer,
     ContentType: mimeType,
+    ACL: 'public-read',
   };
 
   try {
