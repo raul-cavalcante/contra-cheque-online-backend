@@ -17,10 +17,7 @@ export const uploadPayroll = async (req: Request, res: Response) => {
   }
   try {
     const totalPages = await processPayrollPDF(file.buffer, year, month);
-    res.status(200).json({
-      message: 'Contra-cheques processados com sucesso!',
-      pages: totalPages,
-    });
+    res.json({ message: 'Contra-cheques processados com sucesso!', pages: totalPages });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
