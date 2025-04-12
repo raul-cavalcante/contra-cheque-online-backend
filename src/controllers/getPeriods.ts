@@ -1,25 +1,34 @@
 import { getPeriodsService } from "../service/getContra_cheques";
-import { ExtendedRequest } from "../types/types";
-import { Response } from "express";
+import { Request, Response } from "express";
 
-export const getAvailablePeriods= async (req: ExtendedRequest, res: Response) => {
-  if(!req.userId){
+export const getAvailablePeriods = async (req: Request, res: Response) => {
+  const userId = req.userId as string;
+  if(!userId){
     res.status(401).json({error: 'Não autorizado'});
     return;
   }
 
-  const { month, year } = req;
-
-  if (!month || !year || isNaN(Number(month)) || isNaN(Number(year))) {
-    res.status(400).json({ error: 'Os parâmetros month e year devem ser números válidos.' });
-    return;
-  }
-
-  const user = await getPeriodsService(req.userId, Number(month), Number(year));
+  // Os parâmetros month e year são opcionais para esta rota
+  const { month, year } = req.query;
+  const parsedMonth = month ? Number(month) : undefined;
+  const parsedYear = year ? Number(year) : undefined;
   
-  if(!user){
-    res.status(404).json({error: 'Nenhum contra-cheque encontrado'});
+  // Verificar se os valores são válidos quando fornecidos
+  if ((month && (isNaN(parsedMonth!) || parsedMonth === undefined)) || 
+      (year && (isNaN(parsedYear!) || parsedYear === undefined))) {
+    res.status(400).json({error: 'Month e year, quando fornecidos, devem ser números válidos'});
     return;
   }
-  res.status(200).json(user);
+
+  try {
+    const user = await getPeriodsService(userId, parsedMonth, parsedYear);
+    
+    if(!user || user.length === 0){
+      res.status(404).json({error: 'Nenhum período encontrado'});
+      return;
+    }
+    res.status(200).json(user);
+  } catch (error: any) {
+    res.status(500).json({error: error.message});
+  }
 }

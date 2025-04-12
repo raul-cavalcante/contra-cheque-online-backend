@@ -1,25 +1,19 @@
-import { NextFunction,Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { ExtendedRequest } from '../types/types';
 
 export const generateToken = (id: string) => {
   return jwt.sign({id}, process.env.JWT_SECRET as string);
 };
 
-
 declare global {
   namespace Express {
     interface Request {
-      userId?: any;
-      month: Number;
-      year: any;
-      password: any;
-      id: any;
+      userId?: string;
     }
   }
 }
 
-export const verifyToken = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   if(!authHeader){
     res.status(401).json({error: 'acesso negado'});
