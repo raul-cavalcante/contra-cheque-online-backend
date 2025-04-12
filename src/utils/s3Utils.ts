@@ -1,24 +1,59 @@
 import AWS from 'aws-sdk';
 import logger from './logger';
+import config from '../config/config';
 
-// Configuração do cliente S3
+// Configuração do cliente S3 com timeout aumentado
 const s3Config = {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION || 'us-east-1',
+  accessKeyId: config.s3.AWS_ACCESS_KEY_ID,
+  secretAccessKey: config.s3.AWS_SECRET_ACCESS_KEY,
+  region: config.s3.AWS_REGION,
+  httpOptions: {
+    timeout: 300000, // 5 minutos para uploads grandes
+    connectTimeout: 10000 // 10 segundos para conexão
+  },
+  maxRetries: 3 // Tentativas automáticas em caso de falha
 };
 
+// Inicialização do cliente S3
 const s3 = new AWS.S3(s3Config);
 
 // Registrar a configuração (com redação de dados sensíveis)
 logger.info('Configuração do S3 inicializada', {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID ? '**REDACTED**' : 'undefined',
-  region: process.env.AWS_REGION || 'us-east-1',
-  bucket: process.env.AWS_S3_BUCKET_NAME || 'contra-cheque-pdf',
+  accessKeyId: config.s3.AWS_ACCESS_KEY_ID ? '**REDACTED**' : 'undefined',
+  region: config.s3.AWS_REGION,
+  bucket: config.s3.AWS_S3_BUCKET_NAME,
+  hasSecretKey: !!config.s3.AWS_SECRET_ACCESS_KEY
+});
+
+// Validar as credenciais do S3
+const validateS3Credentials = async (): Promise<boolean> => {
+  try {
+    if (!config.s3.AWS_ACCESS_KEY_ID || !config.s3.AWS_SECRET_ACCESS_KEY) {
+      logger.error('Credenciais do AWS S3 não configuradas');
+      return false;
+    }
+    
+    logger.info('Validando credenciais do AWS S3...');
+    // Listagem de buckets como teste de autenticação
+    await s3.listBuckets().promise();
+    logger.info('Credenciais do AWS S3 validadas com sucesso');
+    return true;
+  } catch (error: any) {
+    logger.error('Erro ao validar credenciais do AWS S3', {
+      error: error.message,
+      code: error.code
+    });
+    return false;
+  }
+};
+
+// Executar validação ao inicializar
+validateS3Credentials().catch(err => {
+  logger.error('Falha ao inicializar validação do S3', { error: err.message });
 });
 
 // Bucket name constante para evitar erros de digitação
-const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'contra-cheque-pdf';
+const BUCKET_NAME = config.s3.AWS_S3_BUCKET_NAME;
 
 // Função para verificar se o bucket existe
 const checkBucketExists = async (bucketName: string): Promise<boolean> => {
@@ -40,7 +75,7 @@ const checkBucketExists = async (bucketName: string): Promise<boolean> => {
         await s3.createBucket({
           Bucket: bucketName,
           CreateBucketConfiguration: {
-            LocationConstraint: process.env.AWS_REGION || 'us-east-1'
+            LocationConstraint: config.s3.AWS_REGION
           }
         }).promise();
         logger.info(`Bucket ${bucketName} criado com sucesso`);
@@ -67,6 +102,13 @@ const checkBucketExists = async (bucketName: string): Promise<boolean> => {
  */
 export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType: string): Promise<string> => {
   const bucketName = BUCKET_NAME;
+  
+  if (!fileBuffer || fileBuffer.length === 0) {
+    const errorMsg = 'Buffer do arquivo vazio ou inválido';
+    logger.error(errorMsg, { fileName });
+    throw new Error(errorMsg);
+  }
+  
   logger.info(`Iniciando upload para o S3`, {
     fileName,
     mimeType,
@@ -93,12 +135,18 @@ export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType:
 
   try {
     // Executar o upload
-    logger.info(`Enviando arquivo para o S3`, { fileName });
+    logger.info(`Enviando arquivo para o S3`, { 
+      fileName,
+      contentType: mimeType,
+      size: fileBuffer.length
+    });
+    
     const data = await s3.upload(params).promise();
     
     logger.info(`Upload concluído com sucesso`, {
       fileName,
-      url: data.Location
+      url: data.Location,
+      etag: data.ETag
     });
     
     return data.Location; // Retorna a URL pública do arquivo
@@ -106,7 +154,9 @@ export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType:
     logger.error('Erro ao fazer upload para o S3', {
       errorCode: error.code,
       errorMessage: error.message,
-      fileName
+      errorStack: error.stack,
+      fileName,
+      size: fileBuffer.length
     });
     throw new Error(`Erro ao fazer upload para o S3: ${error.message}`);
   }
