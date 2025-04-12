@@ -1,28 +1,41 @@
-import express, { urlencoded } from 'express'
+import express, { urlencoded, json } from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
 import path from 'path';
 import 'dotenv/config';
 import { mainRouter } from './routers/main'
+import logger from './utils/logger';
+import config from './config/config';
 
+// Inicialização do servidor Express
 const server = express()
 
+// Middlewares de segurança e parse de corpo
 server.use(helmet())
-server.use(cors())
-server.use(urlencoded({ extended: true, limit: '50mb' })) // Aumenta o limite para 50MB
-server.use(express.json({ limit: '50mb' })) // Aumenta o limite para 50MB
-const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
-server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
-
 server.use(cors({
-  origin: 'https://contra-cheque-online.vercel.app',
+  origin: config.server.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+}))
+server.use(urlencoded({ extended: true }))
+server.use(json())
 
-const PORT = process.env.PORT || 3001
-server.listen(PORT, () => {
-  console.log(`Servidor rodando em: http://localhost:3001`)
-})
+// Configuração de diretório de upload
+const UPLOAD_DIR = config.server.UPLOAD_DIR;
+server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
 
+logger.info('Configurações do servidor carregadas', {
+  port: config.server.PORT,
+  uploadDir: UPLOAD_DIR,
+  corsOrigin: config.server.CORS_ORIGIN
+});
+
+// Configuração das rotas
 server.use(mainRouter)
+
+// Inicialização do servidor
+const PORT = config.server.PORT;
+server.listen(PORT, () => {
+  logger.info(`Servidor rodando em: http://localhost:${PORT}`);
+  logger.info('API de contra-cheques online iniciada com sucesso');
+});
