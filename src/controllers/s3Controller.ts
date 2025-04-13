@@ -31,13 +31,13 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const { year, month, cpf } = parsed.data;
-    console.log(`Dados validados com sucesso: year=${year}, month=${month}, cpf=${cpf}`);
+    const { year, month } = parsed.data;
+    console.log(`Dados validados com sucesso: year=${year}, month=${month}`);
 
     const contentType = req.body.contentType || 'application/pdf';
 
-    // Gerar um nome único para o arquivo com o CPF
-    const fileKey = `uploads/${year}-${month}-${cpf}.pdf`;
+    // Gerar um nome único para o arquivo sem o CPF
+    const fileKey = `uploads/${year}-${month}.pdf`;
     console.log(`Gerando URL pré-assinada para o arquivo: ${fileKey}`);
 
     // Gerar URL pré-assinada para upload
