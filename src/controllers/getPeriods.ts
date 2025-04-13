@@ -2,7 +2,7 @@ import { getPeriodsService } from "../service/getContra_cheques";
 import { ExtendedRequest } from "../types/types";
 import { Response } from "express";
 
-export const getAvailablePeriods= async (req: ExtendedRequest, res: Response) => {
+export const getAvailablePeriods= async (req: ExtendedRequest, res: Response): Promise<void> => {
   if(!req.userId){
     res.status(401).json({error: 'Não autorizado'});
     return;

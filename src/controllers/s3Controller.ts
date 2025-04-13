@@ -1,0 +1,114 @@
+import { Request, Response } from 'express';
+import AWS from 'aws-sdk';
+import { v4 as uuidv4 } from 'uuid';
+import { uploadPayslipSchema } from '../schemas/payslipSchemas';
+import payrollQueue from '../queues/payrollQueue';
+
+// Configuração do cliente S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+/**
+ * Gera uma URL pré-assinada para upload direto para o S3
+ */
+export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Validar os dados recebidos
+    const parsed = uploadPayslipSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.format() });
+      return;
+    }
+    
+    const { year, month } = parsed.data;
+    const contentType = req.body.contentType || 'application/pdf';
+    
+    // Gerar um nome único para o arquivo
+    const fileKey = `uploads/${year}/${month}/${uuidv4()}.pdf`;
+    
+    // Gerar URL pré-assinada para upload
+    const presignedUrl = s3.getSignedUrl('putObject', {
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: fileKey,
+      ContentType: contentType,
+      Expires: 300, // URL válida por 5 minutos
+    });
+    
+    // Retornar a URL e metadados
+    res.json({
+      uploadUrl: presignedUrl,
+      fileKey,
+      year,
+      month,
+      expiresIn: 300 // 5 minutos
+    });
+  } catch (error: any) {
+    console.error('Erro ao gerar URL pré-assinada:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Inicia o processamento de um arquivo já enviado ao S3
+ */
+export const processS3Upload = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Validar os dados recebidos
+    const { fileKey } = req.body;
+    const parsed = uploadPayslipSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.format() });
+      return;
+    }
+    
+    if (!fileKey) {
+      res.status(400).json({ error: 'fileKey é obrigatório' });
+      return;
+    }
+    
+    const { year, month } = parsed.data;
+    
+    // Verificar se o arquivo existe no S3
+    try {
+      await s3.headObject({
+        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Key: fileKey
+      }).promise();
+    } catch (err) {
+      res.status(404).json({ error: 'Arquivo não encontrado no S3' });
+      return;
+    }
+    
+    // Adicionar job à fila para processamento assíncrono
+    const job = await payrollQueue.add(
+      'processS3File',
+      {
+        fileKey,
+        year,
+        month
+      },
+      {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000
+        },
+        removeOnComplete: true
+      }
+    );
+    
+    // Retornar ID do job para acompanhamento
+    res.status(202).json({
+      message: 'Processamento do contra-cheque iniciado com sucesso!',
+      jobId: job.id,
+      status: 'processing'
+    });
+  } catch (error: any) {
+    console.error('Erro ao iniciar processamento:', error);
+    res.status(500).json({ error: error.message });
+  }
+}; 

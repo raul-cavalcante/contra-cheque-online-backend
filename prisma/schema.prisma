@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,9 +24,11 @@ model Payslip {
   month     Int
   fileUrl   String
   createdAt DateTime  @default(now())
-  cpf       String    @unique
+  cpf       String
 
   user      User      @relation(fields: [userId], references: [id])
+  
+  @@unique([cpf, year, month])
 }
 
 model Admin {

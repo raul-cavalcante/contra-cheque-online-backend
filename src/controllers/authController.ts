@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { generateToken, verifyToken } from '../utils/jwt';
 import {prisma} from '../utils/prisma';
 
-export const loginUser = async (req: Request, res: Response) => {
+export const loginUser = async (req: Request, res: Response): Promise<void> => {
   const { cpf, password } = req.body;
   try {
     const user = await prisma.user.findUnique({ where: { cpf, password } });
@@ -20,7 +20,7 @@ export const loginUser = async (req: Request, res: Response) => {
 };
 
 
-export const loginAdmin = async (req: Request, res: Response) => {
+export const loginAdmin = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
   try {
     const admin = await prisma.admin.findUnique({ where: { email, password } });
@@ -38,7 +38,7 @@ export const loginAdmin = async (req: Request, res: Response) => {
 };
 
 
-export const updatePassword = async (req: Request, res: Response) => {
+export const updatePassword = async (req: Request, res: Response): Promise<void> => {
   const { newPassword } = req.body;
 
   try {
