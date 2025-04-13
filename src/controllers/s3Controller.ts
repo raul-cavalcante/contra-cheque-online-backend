@@ -146,3 +146,40 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * Gera uma URL pré-assinada para download de arquivos no S3
+ */
+export const getPresignedDownloadUrl = async (req: Request, res: Response): Promise<void> => {
+  console.log('Recebendo requisição para gerar URL pré-assinada de download:', req.body);
+  try {
+    const { fileKey } = req.body;
+
+    if (!fileKey) {
+      console.error('Erro: fileKey não fornecido na requisição');
+      res.status(400).json({ error: 'fileKey é obrigatório' });
+      return;
+    }
+
+    console.log(`Gerando URL pré-assinada de download para o arquivo: ${fileKey}`);
+
+    // Gerar URL pré-assinada para download
+    const presignedUrl = s3.getSignedUrl('getObject', {
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: fileKey,
+      Expires: 300, // URL válida por 5 minutos
+    });
+
+    console.log('URL pré-assinada de download gerada com sucesso:', presignedUrl);
+
+    // Retornar a URL
+    res.json({
+      downloadUrl: presignedUrl,
+      fileKey,
+      expiresIn: 300 // 5 minutos
+    });
+  } catch (error: any) {
+    console.error('Erro ao gerar URL pré-assinada de download:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
