@@ -1,9 +1,9 @@
 import { Request } from "express";
 
 export type ExtendedRequest = Request & {
-    userId?: string;
-    month?: number;
-    year?: number;
-    password?: string;
+    userId?: String;
+    month: Number;
+    year: Number;
+    password: Number;
     id?: any;
   };

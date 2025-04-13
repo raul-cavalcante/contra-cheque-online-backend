@@ -50,14 +50,14 @@ export const getContraCheques = async (userId: string, month: number, year: numb
  * e retorna as combinações distintas de "year" e "month".
  */
 
-export const getPeriodsService = async (userId: string, month?: number, year?: number): Promise<Period[]> => {    
+export const getPeriodsService = async (userId: string, month: number, year: number): Promise<Period[]> => {    
     const whereClause: any = { userId };
 
-    if (month !== undefined && !isNaN(month)) {
+    if (!isNaN(month)) {
         whereClause.month = month;
     }
 
-    if (year !== undefined && !isNaN(year)) {
+    if (!isNaN(year)) {
         whereClause.year = year;
     }
 
