@@ -21,21 +21,25 @@ const upload = multer({
  * Gera uma URL pré-assinada para upload direto para o S3
  */
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
-  console.log('Gerando URL pré-assinada para upload no S3');
+  console.log('Recebendo requisição para gerar URL pré-assinada:', req.body);
   try {
     // Validar os dados recebidos
     const parsed = uploadPayslipSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.error('Erro na validação dos dados:', parsed.error.format());
       res.status(400).json({ error: parsed.error.format() });
       return;
     }
-    
+
     const { year, month, cpf } = parsed.data;
+    console.log(`Dados validados com sucesso: year=${year}, month=${month}, cpf=${cpf}`);
+
     const contentType = req.body.contentType || 'application/pdf';
-    
+
     // Gerar um nome único para o arquivo com o CPF
     const fileKey = `uploads/${year}-${month}-${cpf}.pdf`;
-    
+    console.log(`Gerando URL pré-assinada para o arquivo: ${fileKey}`);
+
     // Gerar URL pré-assinada para upload
     const presignedUrl = s3.getSignedUrl('putObject', {
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
@@ -43,7 +47,7 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       ContentType: contentType,
       Expires: 300, // URL válida por 5 minutos
     });
-    
+
     // Retornar a URL e metadados
     res.json({
       uploadUrl: presignedUrl,
