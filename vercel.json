@@ -15,7 +15,6 @@
   "functions": {
     "limits": {
       "maxDuration": 10
-    },
-    "maxLambdaSize": "50mb"
+    }
   }
 }
