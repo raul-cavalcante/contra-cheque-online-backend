@@ -3,12 +3,18 @@ import AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadPayslipSchema } from '../schemas/payslipSchemas';
 import payrollQueue from '../queues/payrollQueue';
+import multer from 'multer';
 
 // Configuração do cliente S3
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
+});
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // Limite de 50MB
 });
 
 /**
@@ -23,11 +29,11 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       return;
     }
     
-    const { year, month } = parsed.data;
+    const { year, month, cpf } = parsed.data;
     const contentType = req.body.contentType || 'application/pdf';
     
-    // Gerar um nome único para o arquivo
-    const fileKey = `uploads/${year}/${month}/${uuidv4()}.pdf`;
+    // Gerar um nome único para o arquivo com o CPF
+    const fileKey = `uploads/${year}-${month}-${cpf}.pdf`;
     
     // Gerar URL pré-assinada para upload
     const presignedUrl = s3.getSignedUrl('putObject', {
@@ -111,4 +117,4 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     console.error('Erro ao iniciar processamento:', error);
     res.status(500).json({ error: error.message });
   }
-}; 
+};
