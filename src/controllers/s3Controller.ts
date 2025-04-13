@@ -48,6 +48,8 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       Expires: 300, // URL válida por 5 minutos
     });
 
+    console.log('URL pré-assinada gerada com sucesso:', presignedUrl);
+
     // Retornar a URL e metadados
     res.json({
       uploadUrl: presignedUrl,
@@ -66,59 +68,72 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
  * Inicia o processamento de um arquivo já enviado ao S3
  */
 export const processS3Upload = async (req: Request, res: Response): Promise<void> => {
-  console.log('Iniciando processamento de upload no S3');
+  console.log('Iniciando processamento de upload no S3:', req.body);
   try {
     // Validar os dados recebidos
     const { fileKey } = req.body;
     const parsed = uploadPayslipSchema.safeParse(req.body);
-    
+
     if (!parsed.success) {
+      console.error('Erro na validação dos dados:', parsed.error.format());
       res.status(400).json({ error: parsed.error.format() });
       return;
     }
-    
+
     if (!fileKey) {
+      console.error('Erro: fileKey não fornecido na requisição');
       res.status(400).json({ error: 'fileKey é obrigatório' });
       return;
     }
-    
+
     const { year, month } = parsed.data;
-    
+    console.log(`Dados validados com sucesso: year=${year}, month=${month}, fileKey=${fileKey}`);
+
     // Verificar se o arquivo existe no S3
     try {
+      console.log(`Verificando existência do arquivo no S3: ${fileKey}`);
       await s3.headObject({
         Bucket: process.env.AWS_S3_BUCKET_NAME!,
         Key: fileKey
       }).promise();
+      console.log(`Arquivo encontrado no S3: ${fileKey}`);
     } catch (err) {
+      console.error(`Erro: Arquivo não encontrado no S3: ${fileKey}`, err);
       res.status(404).json({ error: 'Arquivo não encontrado no S3' });
       return;
     }
-    
+
     // Adicionar job à fila para processamento assíncrono
-    const job = await payrollQueue.add(
-      'processS3File',
-      {
-        fileKey,
-        year,
-        month
-      },
-      {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000
+    try {
+      console.log('Adicionando job à fila para processamento:', { fileKey, year, month });
+      const job = await payrollQueue.add(
+        'processS3File',
+        {
+          fileKey,
+          year,
+          month
         },
-        removeOnComplete: true
-      }
-    );
-    
-    // Retornar ID do job para acompanhamento
-    res.status(202).json({
-      message: 'Processamento do contra-cheque iniciado com sucesso!',
-      jobId: job.id,
-      status: 'processing'
-    });
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000
+          },
+          removeOnComplete: true
+        }
+      );
+      console.log('Job adicionado com sucesso à fila:', job.id);
+
+      // Retornar ID do job para acompanhamento
+      res.status(202).json({
+        message: 'Processamento do contra-cheque iniciado com sucesso!',
+        jobId: job.id,
+        status: 'processing'
+      });
+    } catch (err) {
+      console.error('Erro ao adicionar job à fila:', err);
+      res.status(500).json({ error: 'Erro ao adicionar job à fila' });
+    }
   } catch (error: any) {
     console.error('Erro ao iniciar processamento:', error);
     res.status(500).json({ error: error.message });
