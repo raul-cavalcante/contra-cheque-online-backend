@@ -14,8 +14,7 @@
   ],
   "functions": {
     "limits": {
-      "maxDuration": 10,
-      "maxMemory": 1024
+      "maxDuration": 10
     },
     "maxLambdaSize": "50mb"
   }
