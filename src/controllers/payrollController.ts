@@ -16,6 +16,7 @@ const ensureUploadDirExists = () => {
 };
 
 export const uploadPayroll = async (req: Request, res: Response): Promise<void> => {
+  console.log('Iniciando upload de contra-cheque');
   const parsed = uploadPayslipSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.format() });
@@ -80,6 +81,7 @@ export const uploadPayroll = async (req: Request, res: Response): Promise<void> 
 
 // Endpoint para verificar o status do job
 export const checkJobStatus = async (req: Request, res: Response): Promise<void> => {
+  console.log('Verificando status do job');
   const { jobId } = req.params;
   
   try {

@@ -2,7 +2,8 @@ import { getPeriodsService } from "../service/getContra_cheques";
 import { ExtendedRequest } from "../types/types";
 import { Response } from "express";
 
-export const getAvailablePeriods= async (req: ExtendedRequest, res: Response): Promise<void> => {
+export const getAvailablePeriods = async (req: ExtendedRequest, res: Response): Promise<void> => {
+  console.log('Buscando períodos disponíveis para o usuário');
   if(!req.userId){
     res.status(401).json({error: 'Não autorizado'});
     return;

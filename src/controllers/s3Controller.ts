@@ -21,6 +21,7 @@ const upload = multer({
  * Gera uma URL pré-assinada para upload direto para o S3
  */
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
+  console.log('Gerando URL pré-assinada para upload no S3');
   try {
     // Validar os dados recebidos
     const parsed = uploadPayslipSchema.safeParse(req.body);
@@ -61,6 +62,7 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
  * Inicia o processamento de um arquivo já enviado ao S3
  */
 export const processS3Upload = async (req: Request, res: Response): Promise<void> => {
+  console.log('Iniciando processamento de upload no S3');
   try {
     // Validar os dados recebidos
     const { fileKey } = req.body;

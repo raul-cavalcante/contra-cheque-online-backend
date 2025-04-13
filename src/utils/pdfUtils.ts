@@ -3,6 +3,7 @@ import pdfParse from 'pdf-parse';
 import { uploadToS3 } from './s3Utils'; // Importa a função de upload para o S3
 
 export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
+  console.log('Extraindo páginas do PDF');
   const pdfDoc = await PDFDocument.load(fileBuffer);
   const pages: Buffer[] = []; // Alterado para armazenar buffers das páginas
   const pageCount = pdfDoc.getPageCount();
@@ -18,6 +19,7 @@ export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
 };
 
 export const extractCPFFromPDFPage = async (pageBuffer: Buffer) => {
+  console.log('Extraindo CPF da página do PDF');
   const pdfData = await pdfParse(pageBuffer);
   const text = pdfData.text;
 

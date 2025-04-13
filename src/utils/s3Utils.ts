@@ -18,6 +18,7 @@ const checkBucketExists = async (bucketName: string) => {
 };
 
 export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
+  console.log(`Iniciando upload para o S3: ${fileName}`);
   const bucketName = process.env.AWS_S3_BUCKET_NAME!;
 
   // Verifica se o bucket existe antes de fazer o upload

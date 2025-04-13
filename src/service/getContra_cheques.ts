@@ -19,6 +19,7 @@ interface Period {
 }
 
 export const getContraCheques = async (userId: string, month: number, year: number): Promise<ContraCheque[]> => {    
+    console.log(`Buscando contra-cheques para o usuário ${userId}, mês ${month}, ano ${year}`);
     if (isNaN(month) || isNaN(year)) {
         throw new Error('Os valores de month e year devem ser números válidos.');
     }
@@ -51,6 +52,7 @@ export const getContraCheques = async (userId: string, month: number, year: numb
  */
 
 export const getPeriodsService = async (userId: string, month: number, year: number): Promise<Period[]> => {    
+    console.log(`Buscando períodos disponíveis para o usuário ${userId}, mês ${month}, ano ${year}`);
     const whereClause: any = { userId };
 
     if (!isNaN(month)) {

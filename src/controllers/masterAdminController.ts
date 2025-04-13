@@ -11,6 +11,7 @@ const createAdminSchema = z.object({
 
 
 export const createAdminController = async (req: Request, res: Response): Promise<void> => {
+  console.log('Criando novo administrador');
   try {
     const parsed = createAdminSchema.parse(req.body);
     const { email, password, role } = parsed;
@@ -32,6 +33,7 @@ const deleteAdminSchema = z.object({
 });
 
 export const deleteAdminController = async (req: Request, res: Response): Promise<void> => {
+  console.log('Deletando administrador');
   try {
     const parsed = deleteAdminSchema.parse(req.params);
     const { id } = parsed;
@@ -43,6 +45,7 @@ export const deleteAdminController = async (req: Request, res: Response): Promis
 };
 
 export const listAdminsController = async (req: Request, res: Response): Promise<void> => {
+  console.log('Listando administradores');
   try {
     const admins = await prisma.admin.findMany();
     res.json(admins);
