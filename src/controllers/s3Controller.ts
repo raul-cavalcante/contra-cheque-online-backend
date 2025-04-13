@@ -48,6 +48,13 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       Expires: 300, // URL válida por 5 minutos
     });
 
+    console.log('Parâmetros usados para gerar a URL pré-assinada:', {
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: fileKey,
+      ContentType: contentType,
+      Expires: 300
+    });
+
     console.log('URL pré-assinada gerada com sucesso:', presignedUrl);
 
     // Retornar a URL e metadados
