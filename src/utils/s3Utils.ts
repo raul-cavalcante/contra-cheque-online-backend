@@ -1,15 +1,19 @@
-import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+const s3Client = new S3Client({
   region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+  }
 });
 
 // Função para verificar se o bucket existe
 const checkBucketExists = async (bucketName: string) => {
   try {
-    await s3.headBucket({ Bucket: bucketName }).promise();
+    const command = new HeadBucketCommand({ Bucket: bucketName });
+    await s3Client.send(command);
     console.log(`Bucket ${bucketName} verificado com sucesso.`);
   } catch (error) {
     console.error(`Erro ao verificar o bucket ${bucketName}:`, error);
@@ -17,26 +21,26 @@ const checkBucketExists = async (bucketName: string) => {
   }
 };
 
-export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
+export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, contentType: string) => {
   console.log(`Iniciando upload para o S3: ${fileName}`);
   const bucketName = process.env.AWS_S3_BUCKET_NAME!;
 
-  // Verifica se o bucket existe antes de fazer o upload
   await checkBucketExists(bucketName);
 
-  const params = {
+  const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: fileName,
     Body: fileBuffer,
-    ContentType: mimeType,
-    ACL: 'public-read', // Define o objeto como público
-  };
+    ContentType: contentType,
+  });
 
   try {
-    const data = await s3.upload(params).promise();
-    return data.Location; // Retorna a URL pública do arquivo
+    await s3Client.send(command);
+    return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
   } catch (error) {
     console.error('Erro ao fazer upload para o S3:', error);
     throw new Error('Erro ao fazer upload para o S3');
   }
 };
+
+export { s3Client };
