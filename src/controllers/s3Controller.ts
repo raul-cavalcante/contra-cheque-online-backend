@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadPayslipSchema } from '../schemas/payslipSchemas';
@@ -75,10 +75,11 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
 
     try {
       console.log(`Verificando existência do arquivo no S3: ${fileKey}`);
-      await s3Client.headObject({
+      const headCommand = new HeadObjectCommand({
         Bucket: process.env.AWS_S3_BUCKET_NAME!,
         Key: fileKey
-      }).promise();
+      });
+      await s3Client.send(headCommand);
       console.log(`Arquivo encontrado no S3: ${fileKey}`);
     } catch (err) {
       console.error(`Erro: Arquivo não encontrado no S3: ${fileKey}`, err);
@@ -134,11 +135,12 @@ export const getPresignedDownloadUrl = async (req: Request, res: Response): Prom
 
     console.log(`Gerando URL pré-assinada de download para o arquivo: ${fileKey}`);
 
-    const presignedUrl = await getSignedUrl(s3Client, {
+    const command = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
-      Key: fileKey,
-      Expires: 300,
+      Key: fileKey
     });
+
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
 
     console.log('URL pré-assinada de download gerada com sucesso:', presignedUrl);
 
