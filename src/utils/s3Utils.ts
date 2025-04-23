@@ -6,7 +6,9 @@ const s3Client = new S3Client({
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-  }
+  },
+  forcePathStyle: false,
+  useAccelerateEndpoint: false
 });
 
 // Função para verificar se o bucket existe
@@ -31,7 +33,7 @@ export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, contentTy
     Bucket: bucketName,
     Key: fileName,
     Body: fileBuffer,
-    ContentType: contentType,
+    ContentType: contentType
   });
 
   try {
