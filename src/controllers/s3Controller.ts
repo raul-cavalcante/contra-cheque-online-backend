@@ -32,12 +32,11 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
       Key: fileKey,
-      ContentType: contentType,
+      ContentType: contentType
     });
 
     const signedUrlOptions = {
-      expiresIn: 300,
-      signableHeaders: new Set(['host', 'content-type']),
+      expiresIn: 300
     };
 
     const presignedUrl = await getSignedUrl(s3Client, command, signedUrlOptions);
@@ -50,9 +49,7 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       year,
       month,
       expiresIn: 300,
-      headers: {
-        'Content-Type': contentType,
-      }
+      contentType
     });
   } catch (error: any) {
     console.error('Erro ao gerar URL pré-assinada:', error);
