@@ -23,34 +23,37 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
     }
 
     const { year, month } = parsed.data;
-    console.log(`Dados validados com sucesso: year=${year}, month=${month}`);
-
     const contentType = req.body.contentType || 'application/pdf';
     const fileKey = `uploads/${year}-${month}.pdf`;
+
     console.log(`Gerando URL pré-assinada para o arquivo: ${fileKey}`);
 
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME,
       Key: fileKey,
-      ContentType: contentType,
-      ACL: 'private'
+      ContentType: contentType
     });
 
-    const url = await getSignedUrl(s3Client, command, {
-      expiresIn: 300,
-      signableHeaders: new Set(['content-type', 'host'])
+    // Configurar headers específicos para a URL pré-assinada
+    const signedUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 300
     });
 
-    console.log('URL pré-assinada gerada com sucesso:', url);
+    // Configurar CORS headers na resposta
+    res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
+    res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    console.log('URL pré-assinada gerada com sucesso:', signedUrl);
 
     res.json({
-      uploadUrl: url,
+      uploadUrl: signedUrl,
       fileKey,
       year,
       month,
       expiresIn: 300,
       contentType,
-      requiredHeaders: {
+      headers: {
         'Content-Type': contentType
       }
     });
