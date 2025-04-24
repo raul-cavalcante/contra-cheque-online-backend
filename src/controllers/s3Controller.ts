@@ -38,6 +38,7 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
 
     const url = await getSignedUrl(s3Client, command, {
       expiresIn: 300,
+      signableHeaders: new Set(['content-type', 'host'])
     });
 
     console.log('URL pré-assinada gerada com sucesso:', url);
@@ -49,7 +50,7 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       month,
       expiresIn: 300,
       contentType,
-      expectedHeaders: {
+      requiredHeaders: {
         'Content-Type': contentType
       }
     });
