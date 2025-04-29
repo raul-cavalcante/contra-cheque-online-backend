@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { PutObjectCommand, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuidv4 } from 'uuid';
 import { uploadPayslipSchema } from '../schemas/payslipSchemas';
 import payrollQueue from '../queues/payrollQueue';
 import multer from 'multer';
@@ -13,7 +12,11 @@ const upload = multer({
 });
 
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
-  console.log('Recebendo requisição para gerar URL pré-assinada:', req.body);
+  console.log('Recebendo requisição para gerar URL pré-assinada:', {
+    body: req.body,
+    headers: req.headers
+  });
+
   try {
     const parsed = uploadPayslipSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -34,18 +37,13 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       ContentType: contentType
     });
 
-    // Configurar headers específicos para a URL pré-assinada
     const signedUrl = await getSignedUrl(s3Client, command, {
       expiresIn: 300
     });
 
-    // Configurar CORS headers na resposta
-    res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
-    res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
     console.log('URL pré-assinada gerada com sucesso:', signedUrl);
 
+    res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
     res.json({
       uploadUrl: signedUrl,
       fileKey,
@@ -58,13 +56,20 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
       }
     });
   } catch (error: any) {
-    console.error('Erro ao gerar URL pré-assinada:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erro detalhado ao gerar URL pré-assinada:', error);
+    res.status(500).json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    });
   }
 };
 
 export const processS3Upload = async (req: Request, res: Response): Promise<void> => {
-  console.log('Iniciando processamento de upload no S3:', req.body);
+  console.log('Iniciando processamento de upload no S3:', {
+    body: req.body,
+    headers: req.headers
+  });
+
   try {
     const { fileKey } = req.body;
     const parsed = uploadPayslipSchema.safeParse(req.body);
@@ -118,18 +123,22 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
       );
       console.log('Job adicionado com sucesso à fila:', job.id);
 
+      res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
       res.status(202).json({
         message: 'Processamento do contra-cheque iniciado com sucesso!',
         jobId: job.id,
         status: 'processing'
       });
     } catch (err) {
-      console.error('Erro ao adicionar job à fila:', err);
+      console.error('Erro detalhado ao adicionar job à fila:', err);
       res.status(500).json({ error: 'Erro ao adicionar job à fila' });
     }
   } catch (error: any) {
-    console.error('Erro ao iniciar processamento:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erro detalhado ao processar upload:', error);
+    res.status(500).json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    });
   }
 };
 

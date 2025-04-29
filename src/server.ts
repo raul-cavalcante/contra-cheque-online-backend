@@ -7,24 +7,28 @@ import { mainRouter } from './routers/main'
 
 const server = express()
 
+// Configuração do Helmet
 server.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }))
 
 // Configuração CORS detalhada
-server.use(cors({
-  origin: 'https://contra-cheque-online.vercel.app',
+const corsOptions = {
+  origin: ['https://contra-cheque-online.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
     'Authorization',
-    'X-Amz-Date',
-    'X-Amz-Security-Token',
-    'X-Amz-User-Agent'
+    'X-Requested-With'
   ],
   credentials: true,
-  maxAge: 3600
-}));
+  maxAge: 86400
+};
+
+server.use(cors(corsOptions));
+
+// Middleware para preflight requests
+server.options('*', cors(corsOptions));
 
 server.use(urlencoded({ extended: true, limit: '50mb' }))
 server.use(express.json({ limit: '50mb' }))
@@ -35,14 +39,22 @@ server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
 // Middleware para adicionar headers CORS em todas as respostas
 server.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Amz-Date, X-Amz-Security-Token, X-Amz-User-Agent');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handling preflight
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  
   next();
 });
 
 const PORT = process.env.PORT || 3001
 server.listen(PORT, () => {
-  console.log(`Servidor rodando em: http://localhost:3001`)
+  console.log(`Servidor rodando em: http://localhost:${PORT}`)
 })
 
 server.use(mainRouter)
