@@ -6,9 +6,14 @@ const s3Client = new S3Client({
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-  },
-  forcePathStyle: true
+  }
 });
+
+// Função para gerar URL pública do S3
+export const getPublicS3Url = (fileKey: string) => {
+  const bucketName = process.env.AWS_S3_BUCKET_NAME!;
+  return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+};
 
 // Função para verificar se o bucket existe
 const checkBucketExists = async (bucketName: string) => {
@@ -29,12 +34,12 @@ export const generatePresignedUrl = async (fileName: string, contentType: string
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
-      ContentType: contentType
+      ContentType: contentType,
+      ACL: 'public-read' // Garante que o objeto será público após o upload
     });
 
     const signedUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: 300,
-      signableHeaders: new Set(['host'])
+      expiresIn: 300
     });
 
     return signedUrl;
@@ -54,11 +59,12 @@ export const uploadToS3 = async (fileBuffer: Buffer, fileName: string, contentTy
       Bucket: bucketName,
       Key: fileName,
       Body: fileBuffer,
-      ContentType: contentType
+      ContentType: contentType,
+      ACL: 'public-read' // Garante que o objeto será público após o upload
     });
 
     await s3Client.send(command);
-    return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+    return getPublicS3Url(fileName);
   } catch (error) {
     console.error('Erro ao fazer upload para o S3:', error);
     throw error;

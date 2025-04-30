@@ -4,7 +4,7 @@ import multer from 'multer';
 import { loginUser, loginAdmin, updatePassword } from '../controllers/authController';
 import { createAdminController, deleteAdminController, listAdminsController } from '../controllers/masterAdminController';
 import { uploadPayroll, checkJobStatus } from '../controllers/payrollController';
-import { getPresignedUrl, processS3Upload } from '../controllers/s3Controller';
+import { getPresignedUrl, processS3Upload, checkProcessingStatus } from '../controllers/s3Controller';
 import { authenticateAdmin } from '../middlewares/authMiddleware';
 import { contra_chequeController } from '../controllers/contra_chequeController';
 import { verifyToken } from '../utils/jwt';
@@ -35,6 +35,7 @@ mainRouter.get('/upload/payroll/status/:jobId', authenticateAdmin, checkJobStatu
 // Novas rotas para upload direto no S3 (para arquivos grandes)
 mainRouter.post('/presigned-url', authenticateAdmin, getPresignedUrl);
 mainRouter.post('/process-s3-upload', authenticateAdmin, processS3Upload);
+mainRouter.get('/process-s3-upload/status/:jobId', authenticateAdmin, checkProcessingStatus);
 
 //admin master
 mainRouter.get('/master', authenticateAdmin, listAdminsController);

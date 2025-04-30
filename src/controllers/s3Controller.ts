@@ -3,13 +3,16 @@ import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { uploadPayslipSchema } from '../schemas/payslipSchemas';
 import multer from 'multer';
-import { s3Client } from '../utils/s3Utils';
+import { s3Client, getPublicS3Url } from '../utils/s3Utils';
 import { processS3File } from '../service/payrollService';
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 } 
 });
+
+// Cache para armazenar o status do processamento
+const processingStatus = new Map<string, any>();
 
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
   console.log('Recebendo requisição para gerar URL pré-assinada:', req.body);
@@ -33,14 +36,15 @@ export const getPresignedUrl = async (req: Request, res: Response): Promise<void
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME,
       Key: fileKey,
-      ContentType: contentType
+      ContentType: contentType,
+      ACL: 'public-read'
     });
 
     const signedUrl = await getSignedUrl(s3Client, command, {
       expiresIn: 300
     });
 
-    console.log('URL pré-assinada gerada com sucesso:', signedUrl);
+    console.log('URL pré-assinada gerada com sucesso');
 
     res.json({
       uploadUrl: signedUrl,
@@ -69,27 +73,57 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    console.log('Iniciando processamento do arquivo:', { fileKey, year, month });
+    const jobId = `${year}-${month}-${Date.now()}`;
     
-    try {
-      const result = await processS3File(fileKey, year, month);
-      console.log('Processamento concluído com sucesso:', result);
+    // Retorna imediatamente com status 202
+    res.status(202).json({
+      message: 'Processamento iniciado',
+      jobId,
+      status: 'processing',
+      fileUrl: getPublicS3Url(fileKey)
+    });
 
-      res.json({
-        message: 'Arquivo processado com sucesso',
-        ...result
+    // Processa em background
+    processingStatus.set(jobId, { status: 'processing' });
+    
+    processS3File(fileKey, year, month)
+      .then(result => {
+        console.log('Processamento concluído com sucesso:', result);
+        processingStatus.set(jobId, { 
+          status: 'completed',
+          result
+        });
+      })
+      .catch(error => {
+        console.error('Erro no processamento:', error);
+        processingStatus.set(jobId, { 
+          status: 'error',
+          error: error.message
+        });
       });
-    } catch (err) {
-      console.error('Erro no processamento:', err);
-      res.status(500).json({
-        error: 'Erro no processamento do arquivo',
-        details: process.env.NODE_ENV === 'development' ? err : undefined
-      });
-    }
+
   } catch (error: any) {
     console.error('Erro:', error);
     res.status(500).json({ error: error.message });
   }
+};
+
+export const checkProcessingStatus = async (req: Request, res: Response): Promise<void> => {
+  const { jobId } = req.params;
+  
+  if (!jobId) {
+    res.status(400).json({ error: 'jobId é obrigatório' });
+    return;
+  }
+
+  const status = processingStatus.get(jobId);
+  
+  if (!status) {
+    res.status(404).json({ error: 'Job não encontrado' });
+    return;
+  }
+
+  res.json(status);
 };
 
 export const getPresignedDownloadUrl = async (req: Request, res: Response): Promise<void> => {
