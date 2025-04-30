@@ -1,5 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
-import pdfParse from 'pdf-parse';
+import PDFParse from 'pdf-parse';
 import { uploadToS3 } from './s3Utils'; // Importa a função de upload para o S3
 
 export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
@@ -20,7 +20,7 @@ export const extractPagesFromPDF = async (fileBuffer: Buffer) => {
 
 export const extractCPFFromPDFPage = async (pageBuffer: Buffer) => {
   console.log('Extraindo CPF da página do PDF');
-  const pdfData = await pdfParse(pageBuffer);
+  const pdfData = await PDFParse(pageBuffer);
   const text = pdfData.text;
 
   // Regex para extrair o CPF (formato: 000.000.000-00)
