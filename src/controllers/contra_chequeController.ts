@@ -2,7 +2,7 @@ import { getContraCheques } from "../service/getContra_cheques";
 import { ExtendedRequest } from "../types/types";
 import { Response} from 'express';
 
-export const contra_chequeController = async (req: ExtendedRequest, res: Response): Promise<void> => {
+export const getContraCheque = async (req: ExtendedRequest, res: Response): Promise<void> => {
   if(!req.userId){
     res.status(401).json({error: 'Não autorizado'});
     return;
@@ -14,4 +14,4 @@ export const contra_chequeController = async (req: ExtendedRequest, res: Respons
     return;
   }
   res.status(200).json(user);
-}
+};
