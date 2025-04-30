@@ -13,7 +13,6 @@ interface ContraCheque {
 }
 
 interface Period {
-    userId: string;
     month: number;
     year: number;
 }
@@ -51,25 +50,21 @@ export const getContraCheques = async (userId: string, month: number, year: numb
  * e retorna as combinações distintas de "year" e "month".
  */
 
-export const getPeriodsService = async (userId: string, month: number, year: number): Promise<Period[]> => {    
-    console.log(`Buscando períodos disponíveis para o usuário ${userId}, mês ${month}, ano ${year}`);
-    const whereClause: any = { userId };
-
-    if (!isNaN(month)) {
-        whereClause.month = month;
-    }
-
-    if (!isNaN(year)) {
-        whereClause.year = year;
-    }
-
-    const contraCheques = await prisma.payslip.findMany({
-        where: whereClause,
+export const getPeriodsService = async (userId: string): Promise<Period[]> => {    
+    console.log(`Buscando períodos disponíveis para o usuário ${userId}`);
+    
+    const periods = await prisma.payslip.findMany({
+        where: { userId },
         select: {
-            userId: true,
             month: true,
             year: true,
-        }
+        },
+        distinct: ['month', 'year'],
+        orderBy: [
+            { year: 'desc' },
+            { month: 'desc' }
+        ]
     });
-    return contraCheques;
+
+    return periods;
 }

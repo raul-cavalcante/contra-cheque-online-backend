@@ -1,44 +1,45 @@
-import { Router } from 'express';
-import { login, updatePassword } from '../controllers/authController';
-import { getContraCheque } from '../controllers/contra_chequeController';
-import { processPayroll } from '../controllers/payrollController';
-import { processS3Upload, getPresignedUrl, getPresignedDownloadUrl } from '../controllers/s3Controller';
-import { authenticateToken, authenticateAdmin, authenticateMasterAdmin } from '../middlewares/authMiddleware';
-import { getPeriods } from '../controllers/getPeriods';
+import { Router } from 'express'
+import { pingController } from '../controllers/ping'
+import multer from 'multer';
+import { loginUser, loginAdmin, updatePassword } from '../controllers/authController';
 import { createAdminController, deleteAdminController, listAdminsController } from '../controllers/masterAdminController';
-import { ping } from '../controllers/ping';
+import { uploadPayroll, checkJobStatus } from '../controllers/payrollController';
+import { getPresignedUrl, processS3Upload } from '../controllers/s3Controller';
+import { authenticateAdmin } from '../middlewares/authMiddleware';
+import { contra_chequeController } from '../controllers/contra_chequeController';
+import { verifyToken } from '../utils/jwt';
+import { getAvailablePeriods } from '../controllers/getPeriods';
 
-const mainRouter = Router();
+const mainRouter = Router()
 
-// Rota de ping para verificar se o servidor está online
-mainRouter.get('/ping', ping);
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // Limite de 50MB
+});
 
-// Rotas públicas
-mainRouter.post('/login', login);
+mainRouter.get('/ping', pingController)
 
-// Rotas de autenticação do usuário
-mainRouter.use('/user', authenticateToken);
-mainRouter.post('/user/update-password', updatePassword);
+//Login do usuário
+mainRouter.post('/login/user', loginUser);
+mainRouter.get('/contra-cheques', verifyToken, contra_chequeController)
+mainRouter.get('/yearMonth', verifyToken, getAvailablePeriods);
+mainRouter.put('/user', verifyToken, updatePassword);
 
-// Rotas protegidas por autenticação de admin
-mainRouter.use('/admin', authenticateAdmin);
+//Login do administrador/contador
+mainRouter.post('/login/admin', loginAdmin);
 
-// Rotas que requerem admin master
-mainRouter.post('/admin/create', authenticateMasterAdmin, createAdminController);
-mainRouter.get('/admin/list', authenticateMasterAdmin, listAdminsController);
-mainRouter.delete('/admin/:id', authenticateMasterAdmin, deleteAdminController);
+//Upload de PDF/contra-cheques (requer autenticação de admin)
+mainRouter.post('/upload/payroll', authenticateAdmin, upload.single('file'), uploadPayroll);
+mainRouter.get('/upload/payroll/status/:jobId', authenticateAdmin, checkJobStatus);
 
-// Rotas de contra-cheque (requer autenticação de usuário)
-mainRouter.use('/contracheque', authenticateToken);
-mainRouter.get('/contracheque/:userId/:year/:month', getContraCheque);
-mainRouter.get('/periods/:userId', getPeriods);
+// Novas rotas para upload direto no S3 (para arquivos grandes)
+mainRouter.post('/presigned-url', authenticateAdmin, getPresignedUrl);
+mainRouter.post('/process-s3-upload', authenticateAdmin, processS3Upload);
 
-// Rotas de upload e processamento (requer autenticação de admin)
-mainRouter.use('/upload', authenticateAdmin);
-mainRouter.post('/upload/payroll', processPayroll);
-mainRouter.post('/upload/presigned-url', getPresignedUrl);
-mainRouter.post('/upload/process-s3', processS3Upload);
-mainRouter.post('/upload/download-url', getPresignedDownloadUrl);
+//admin master
+mainRouter.get('/master', authenticateAdmin, listAdminsController);
+mainRouter.post('/master', authenticateAdmin, createAdminController);
+mainRouter.delete('/master/:id', authenticateAdmin, deleteAdminController);
 
 export { mainRouter };
 
