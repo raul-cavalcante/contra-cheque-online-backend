@@ -84,21 +84,27 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     });
 
     // Processa em background
-    processingStatus.set(jobId, { status: 'processing' });
+    processingStatus.set(jobId, { 
+      status: 'processing',
+      progress: 0,
+      startedAt: new Date().toISOString()
+    });
     
     processS3File(fileKey, year, month)
       .then(result => {
         console.log('Processamento concluído com sucesso:', result);
         processingStatus.set(jobId, { 
           status: 'completed',
-          result
+          result,
+          completedAt: new Date().toISOString()
         });
       })
       .catch(error => {
         console.error('Erro no processamento:', error);
         processingStatus.set(jobId, { 
           status: 'error',
-          error: error.message
+          error: error.message,
+          completedAt: new Date().toISOString()
         });
       });
 
@@ -121,6 +127,13 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
   if (!status) {
     res.status(404).json({ error: 'Job não encontrado' });
     return;
+  }
+
+  // Limpa status antigos se completed ou error
+  if (status.status === 'completed' || status.status === 'error') {
+    setTimeout(() => {
+      processingStatus.delete(jobId);
+    }, 3600000); // Limpa após 1 hora
   }
 
   res.json(status);

@@ -2,7 +2,7 @@ import { prisma } from '../utils/prisma';
 import { extractPagesFromPDF, extractCPFFromPDFPage } from '../utils/pdfUtils';
 import { generateInitialPassword, cleanCPF } from '../utils/cpfUtils';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client, getPublicS3Url } from '../utils/s3Utils';
+import { s3Client } from '../utils/s3Utils';
 
 const CHUNK_SIZE = 5; // Número de páginas para processar por vez
 
@@ -14,7 +14,6 @@ export const processS3File = async (
   console.log(`Iniciando processamento do arquivo S3: ${fileKey}`);
   
   try {
-    // Buscar o arquivo do S3
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
       Key: fileKey
@@ -25,7 +24,6 @@ export const processS3File = async (
       throw new Error('Corpo do arquivo vazio');
     }
 
-    // Converter o ReadableStream para Buffer
     const chunks = [];
     for await (const chunk of response.Body as any) {
       chunks.push(chunk);
@@ -34,14 +32,12 @@ export const processS3File = async (
     
     console.log(`Arquivo baixado do S3, tamanho: ${fileBuffer.length} bytes`);
 
-    // Extrair páginas do PDF
     const pages = await extractPagesFromPDF(fileBuffer);
     const totalPages = pages.length;
     console.log(`Total de páginas extraídas: ${totalPages}`);
 
     const results = [];
     let processedPages = 0;
-    const fileUrl = getPublicS3Url(fileKey);
 
     // Processar em chunks para evitar timeout
     for (let i = 0; i < pages.length; i += CHUNK_SIZE) {
@@ -67,7 +63,7 @@ export const processS3File = async (
               userId: user.id,
               year,
               month,
-              fileUrl,
+              fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
               cpf: cleanedCPF,
             },
           });
@@ -96,8 +92,7 @@ export const processS3File = async (
       totalPages,
       processedPages,
       results,
-      success: processedPages > 0,
-      fileUrl
+      success: processedPages > 0
     };
   } catch (error) {
     console.error('Erro ao processar arquivo:', error);
