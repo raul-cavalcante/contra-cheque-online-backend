@@ -11,37 +11,36 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
-// Cache para armazenar o status do processamento
-const processingStatus = new Map<string, {
-  status: 'queued' | 'processing' | 'completed' | 'error';
-  startTime: number;
-  progress: number;
-  error?: string;
-  result?: any;
-  etag?: string;
-  lastModified?: string;
-}>();
-
 // Configurações
 const MAX_PROCESSING_TIME = 5 * 60 * 1000; // 5 minutos
-const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hora
+const RETRY_DELAY = 3000; // 3 segundos
+const MAX_RETRIES = 3;
+
+// Cache para armazenar o status do processamento
+const processingStatus = new Map<string, {
+  status: 'processing' | 'completed' | 'error';
+  startTime: number;
+  lastUpdated: number;
+  error?: string;
+  result?: any;
+  retries: number;
+}>();
 
 // Limpa status antigos periodicamente
-setInterval(() => {
+const cleanupOldStatus = () => {
   const now = Date.now();
   for (const [jobId, status] of processingStatus.entries()) {
-    if (status.status === 'completed' || status.status === 'error') {
-      if (now - status.startTime > CLEANUP_INTERVAL) {
-        processingStatus.delete(jobId);
-      }
-    } else if (status.status === 'processing') {
-      if (now - status.startTime > MAX_PROCESSING_TIME) {
+    if (now - status.startTime > MAX_PROCESSING_TIME) {
+      if (status.status === 'processing') {
         status.status = 'error';
         status.error = 'Tempo máximo de processamento excedido';
       }
+      processingStatus.delete(jobId);
     }
   }
-}, CLEANUP_INTERVAL);
+};
+
+setInterval(cleanupOldStatus, 60000); // Executa a cada minuto
 
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
   console.log('Recebendo requisição para gerar URL pré-assinada:', req.body);
@@ -102,38 +101,48 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
 
     const jobId = `${year}-${month}-${Date.now()}`;
     
-    // Inicia status do processamento
+    // Inicia o status do processamento
     processingStatus.set(jobId, {
       status: 'processing',
       startTime: Date.now(),
-      progress: 0,
+      lastUpdated: Date.now(),
+      retries: 0
     });
 
+    // Retorna imediatamente com o jobId
     res.status(202).json({
       message: 'Processamento iniciado',
       jobId,
       status: 'processing',
+      retryAfter: RETRY_DELAY / 1000,
       fileUrl: getPublicS3Url(fileKey)
     });
 
     // Processa em background
-    try {
-      const result = await processS3File(fileKey, year, month);
-      processingStatus.set(jobId, {
-        status: 'completed',
-        startTime: Date.now(),
-        progress: 100,
-        result
+    processS3File(fileKey, year, month)
+      .then(result => {
+        const status = processingStatus.get(jobId);
+        if (status) {
+          status.status = 'completed';
+          status.lastUpdated = Date.now();
+          status.result = result;
+        }
+      })
+      .catch(error => {
+        console.error('Erro no processamento:', error);
+        const status = processingStatus.get(jobId);
+        if (status) {
+          if (status.retries < MAX_RETRIES) {
+            status.retries++;
+            // Tenta novamente
+            processS3Upload(req, res);
+          } else {
+            status.status = 'error';
+            status.lastUpdated = Date.now();
+            status.error = error.message;
+          }
+        }
       });
-    } catch (error: any) {
-      console.error('Erro no processamento:', error);
-      processingStatus.set(jobId, {
-        status: 'error',
-        startTime: Date.now(),
-        progress: 0,
-        error: error.message
-      });
-    }
 
   } catch (error: any) {
     console.error('Erro:', error);
@@ -144,6 +153,7 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
 export const checkProcessingStatus = async (req: Request, res: Response): Promise<void> => {
   const { jobId } = req.params;
   const ifNoneMatch = req.headers['if-none-match'];
+  const ifModifiedSince = req.headers['if-modified-since'];
   
   if (!jobId) {
     res.status(400).json({ error: 'jobId é obrigatório' });
@@ -153,39 +163,54 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
   const status = processingStatus.get(jobId);
   
   if (!status) {
-    res.status(404).json({ error: 'Job não encontrado' });
+    res.status(404).json({ 
+      error: 'Job não encontrado',
+      details: 'O status pode ter expirado ou o jobId está incorreto'
+    });
     return;
   }
 
+  // Verifica timeout
+  if (Date.now() - status.startTime > MAX_PROCESSING_TIME) {
+    status.status = 'error';
+    status.error = 'Tempo máximo de processamento excedido';
+    processingStatus.delete(jobId);
+  }
+
   // Gera ETag baseado no estado atual
-  const currentEtag = `"${Buffer.from(JSON.stringify(status)).toString('base64')}"`;
+  const statusJson = JSON.stringify(status);
+  const currentEtag = `"${Buffer.from(statusJson).toString('base64')}"`;
+  const lastModified = new Date(status.lastUpdated).toUTCString();
 
   // Verifica se o conteúdo foi modificado
-  if (ifNoneMatch === currentEtag) {
+  if (ifNoneMatch === currentEtag || 
+      (ifModifiedSince && new Date(ifModifiedSince) >= new Date(status.lastUpdated))) {
     res.status(304).end();
     return;
   }
 
-  // Define headers para controle de cache
+  // Define headers
   res.setHeader('ETag', currentEtag);
+  res.setHeader('Last-Modified', lastModified);
+  res.setHeader('Cache-Control', status.status === 'processing' ? 'no-cache' : 'private, max-age=3600');
   
   if (status.status === 'processing') {
-    // Para processamento em andamento, não permite cache
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    res.setHeader('Retry-After', '3'); // Sugere aguardar 3 segundos
-  } else {
-    // Para status final (completed/error), permite cache por 1 hora
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Retry-After', (RETRY_DELAY / 1000).toString());
   }
 
-  // Remove status antigos se completo ou com erro
-  if (status.status === 'completed' || status.status === 'error') {
+  // Se o processamento foi concluído ou teve erro, agenda a remoção do status
+  if (status.status !== 'processing') {
     setTimeout(() => {
       processingStatus.delete(jobId);
-    }, CLEANUP_INTERVAL);
+    }, 3600000); // Remove após 1 hora
   }
 
-  res.json(status);
+  res.json({
+    ...status,
+    maxTime: MAX_PROCESSING_TIME,
+    retryDelay: RETRY_DELAY,
+    maxRetries: MAX_RETRIES
+  });
 };
 
 export const getPresignedDownloadUrl = async (req: Request, res: Response): Promise<void> => {
