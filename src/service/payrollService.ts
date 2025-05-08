@@ -3,6 +3,7 @@ import { extractPagesFromPDF, extractCPFFromPDFPage } from '../utils/pdfUtils';
 import { generateInitialPassword, cleanCPF } from '../utils/cpfUtils';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client } from '../utils/s3Utils';
+import { kv } from '@vercel/kv';
 
 const CHUNK_SIZE = 5; // Número de páginas para processar por vez
 
@@ -10,6 +11,7 @@ export const processS3File = async (
   fileKey: string,
   year: number,
   month: number,
+  jobId?: string
 ) => {
   console.log(`Iniciando processamento do arquivo S3: ${fileKey}`);
   
@@ -69,7 +71,21 @@ export const processS3File = async (
           });
 
           processedPages++;
-          console.log(`Progresso: ${processedPages}/${totalPages} páginas processadas`);
+          
+          // Atualiza o progresso no KV Store
+          if (jobId) {
+            const progress = Math.floor((processedPages / totalPages) * 100);
+            const status = await kv.get(jobId);
+            if (status) {
+              await kv.set(jobId, {
+                ...status,
+                progress,
+                lastUpdated: new Date().toISOString()
+              });
+            }
+          }
+
+          console.log(`Progresso: ${processedPages}/${totalPages} páginas processadas (${Math.floor((processedPages / totalPages) * 100)}%)`);
 
           return {
             cpf: cleanedCPF,

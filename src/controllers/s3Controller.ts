@@ -100,7 +100,7 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     });
 
     // Processa em background
-    processS3File(fileKey, year, month)
+    processS3File(fileKey, year, month, jobId)
       .then(async result => {
         await kv.set(jobId, {
           ...initialStatus,
@@ -122,8 +122,8 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
               attempts,
               lastUpdated: new Date().toISOString()
             });
-            // Tenta novamente
-            processS3Upload(req, res);
+            // Tenta novamente com o mesmo jobId
+            processS3File(fileKey, year, month, jobId);
           } else {
             await kv.set(jobId, {
               ...status,

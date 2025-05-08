@@ -10,7 +10,7 @@ export type ExtendedRequest = Request & {
 
 export interface ProcessingStatus {
   status: 'processing' | 'completed' | 'error' | 'timeout';
-  progress?: number;
+  progress: number;
   startedAt: string;
   lastUpdated?: string;
   completedAt?: string;
