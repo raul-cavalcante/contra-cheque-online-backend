@@ -5,6 +5,8 @@ import { uploadPayslipSchema } from '../schemas/payslipSchemas';
 import multer from 'multer';
 import { s3Client, getPublicS3Url } from '../utils/s3Utils';
 import { processS3File } from '../service/payrollService';
+import { kv } from '@vercel/kv';
+import { ProcessingStatus } from '../types/types';
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -12,35 +14,9 @@ const upload = multer({
 });
 
 // Configurações
-const MAX_PROCESSING_TIME = 5 * 60 * 1000; // 5 minutos
-const RETRY_DELAY = 3000; // 3 segundos
+const MAX_PROCESSING_TIME = 5 * 60; // 5 minutos em segundos
+const RETRY_DELAY = 3; // 3 segundos
 const MAX_RETRIES = 3;
-
-// Cache para armazenar o status do processamento
-const processingStatus = new Map<string, {
-  status: 'processing' | 'completed' | 'error';
-  startTime: number;
-  lastUpdated: number;
-  error?: string;
-  result?: any;
-  retries: number;
-}>();
-
-// Limpa status antigos periodicamente
-const cleanupOldStatus = () => {
-  const now = Date.now();
-  for (const [jobId, status] of processingStatus.entries()) {
-    if (now - status.startTime > MAX_PROCESSING_TIME) {
-      if (status.status === 'processing') {
-        status.status = 'error';
-        status.error = 'Tempo máximo de processamento excedido';
-      }
-      processingStatus.delete(jobId);
-    }
-  }
-};
-
-setInterval(cleanupOldStatus, 60000); // Executa a cada minuto
 
 export const getPresignedUrl = async (req: Request, res: Response): Promise<void> => {
   console.log('Recebendo requisição para gerar URL pré-assinada:', req.body);
@@ -99,47 +75,62 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const jobId = `${year}-${month}-${Date.now()}`;
+    const jobId = `process:${year}-${month}-${Date.now()}`;
+    const now = new Date();
     
-    // Inicia o status do processamento
-    processingStatus.set(jobId, {
+    // Inicia o status do processamento no KV
+    const initialStatus: ProcessingStatus = {
       status: 'processing',
-      startTime: Date.now(),
-      lastUpdated: Date.now(),
-      retries: 0
-    });
+      startedAt: now.toISOString(),
+      progress: 0,
+      attempts: 0,
+      maxAttempts: MAX_RETRIES,
+      timeoutAt: new Date(now.getTime() + MAX_PROCESSING_TIME * 1000).toISOString()
+    };
+
+    await kv.set(jobId, initialStatus, { ex: MAX_PROCESSING_TIME });
 
     // Retorna imediatamente com o jobId
     res.status(202).json({
       message: 'Processamento iniciado',
       jobId,
       status: 'processing',
-      retryAfter: RETRY_DELAY / 1000,
+      retryAfter: RETRY_DELAY,
       fileUrl: getPublicS3Url(fileKey)
     });
 
     // Processa em background
     processS3File(fileKey, year, month)
-      .then(result => {
-        const status = processingStatus.get(jobId);
-        if (status) {
-          status.status = 'completed';
-          status.lastUpdated = Date.now();
-          status.result = result;
-        }
+      .then(async result => {
+        await kv.set(jobId, {
+          ...initialStatus,
+          status: 'completed',
+          progress: 100,
+          result,
+          completedAt: new Date().toISOString()
+        }, { ex: 3600 }); // Guarda por 1h após completar
       })
-      .catch(error => {
+      .catch(async error => {
         console.error('Erro no processamento:', error);
-        const status = processingStatus.get(jobId);
+        const status = await kv.get<ProcessingStatus>(jobId);
+        
         if (status) {
-          if (status.retries < MAX_RETRIES) {
-            status.retries++;
+          const attempts = (status.attempts || 0) + 1;
+          if (attempts < MAX_RETRIES) {
+            await kv.set(jobId, {
+              ...status,
+              attempts,
+              lastUpdated: new Date().toISOString()
+            });
             // Tenta novamente
             processS3Upload(req, res);
           } else {
-            status.status = 'error';
-            status.lastUpdated = Date.now();
-            status.error = error.message;
+            await kv.set(jobId, {
+              ...status,
+              status: 'error',
+              error: error.message,
+              completedAt: new Date().toISOString()
+            }, { ex: 3600 });
           }
         }
       });
@@ -160,7 +151,7 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
     return;
   }
 
-  const status = processingStatus.get(jobId);
+  const status = await kv.get<ProcessingStatus>(jobId);
   
   if (!status) {
     res.status(404).json({ 
@@ -171,20 +162,31 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
   }
 
   // Verifica timeout
-  if (Date.now() - status.startTime > MAX_PROCESSING_TIME) {
+  const now = new Date();
+  const timeoutAt = status.timeoutAt ? new Date(status.timeoutAt) : null;
+  
+  if (timeoutAt && now > timeoutAt && status.status === 'processing') {
+    const updatedStatus = {
+      ...status,
+      status: 'error' as const,
+      error: 'Tempo máximo de processamento excedido',
+      completedAt: now.toISOString()
+    };
+    
+    await kv.set(jobId, updatedStatus, { ex: 3600 });
     status.status = 'error';
-    status.error = 'Tempo máximo de processamento excedido';
-    processingStatus.delete(jobId);
+    status.error = updatedStatus.error;
+    status.completedAt = updatedStatus.completedAt;
   }
 
   // Gera ETag baseado no estado atual
   const statusJson = JSON.stringify(status);
   const currentEtag = `"${Buffer.from(statusJson).toString('base64')}"`;
-  const lastModified = new Date(status.lastUpdated).toUTCString();
+  const lastModified = status.lastUpdated || status.startedAt;
 
   // Verifica se o conteúdo foi modificado
   if (ifNoneMatch === currentEtag || 
-      (ifModifiedSince && new Date(ifModifiedSince) >= new Date(status.lastUpdated))) {
+      (ifModifiedSince && new Date(ifModifiedSince) >= new Date(lastModified))) {
     res.status(304).end();
     return;
   }
@@ -195,14 +197,7 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
   res.setHeader('Cache-Control', status.status === 'processing' ? 'no-cache' : 'private, max-age=3600');
   
   if (status.status === 'processing') {
-    res.setHeader('Retry-After', (RETRY_DELAY / 1000).toString());
-  }
-
-  // Se o processamento foi concluído ou teve erro, agenda a remoção do status
-  if (status.status !== 'processing') {
-    setTimeout(() => {
-      processingStatus.delete(jobId);
-    }, 3600000); // Remove após 1 hora
+    res.setHeader('Retry-After', RETRY_DELAY.toString());
   }
 
   res.json({
