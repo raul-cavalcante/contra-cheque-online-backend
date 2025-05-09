@@ -21,6 +21,19 @@ export const processS3File = async (
       Key: fileKey
     });
 
+    // Atualiza status para indicar início do download
+    if (jobId) {
+      const status = await kv.get(jobId);
+      if (status) {
+        await kv.set(jobId, {
+          ...status,
+          progress: 5,
+          lastUpdated: new Date().toISOString(),
+          currentStep: 'Baixando arquivo do S3'
+        });
+      }
+    }
+
     const response = await s3Client.send(command);
     if (!response.Body) {
       throw new Error('Corpo do arquivo vazio');
@@ -34,12 +47,27 @@ export const processS3File = async (
     
     console.log(`Arquivo baixado do S3, tamanho: ${fileBuffer.length} bytes`);
 
+    // Atualiza status para indicar início da extração de páginas
+    if (jobId) {
+      const status = await kv.get(jobId);
+      if (status) {
+        await kv.set(jobId, {
+          ...status,
+          progress: 10,
+          lastUpdated: new Date().toISOString(),
+          currentStep: 'Extraindo páginas do PDF'
+        });
+      }
+    }
+
     const pages = await extractPagesFromPDF(fileBuffer);
     const totalPages = pages.length;
     console.log(`Total de páginas extraídas: ${totalPages}`);
 
     const results = [];
     let processedPages = 0;
+    const baseProgress = 10; // Progresso base após extração
+    const progressPerPage = (90 / totalPages); // 90% restantes divididos pelo número de páginas
 
     // Processar em chunks para evitar timeout
     for (let i = 0; i < pages.length; i += CHUNK_SIZE) {
@@ -74,18 +102,19 @@ export const processS3File = async (
           
           // Atualiza o progresso no KV Store
           if (jobId) {
-            const progress = Math.floor((processedPages / totalPages) * 100);
+            const currentProgress = Math.floor(baseProgress + (processedPages * progressPerPage));
             const status = await kv.get(jobId);
             if (status) {
               await kv.set(jobId, {
                 ...status,
-                progress,
-                lastUpdated: new Date().toISOString()
+                progress: currentProgress,
+                lastUpdated: new Date().toISOString(),
+                currentStep: `Processando página ${processedPages}/${totalPages}`
               });
             }
           }
 
-          console.log(`Progresso: ${processedPages}/${totalPages} páginas processadas (${Math.floor((processedPages / totalPages) * 100)}%)`);
+          console.log(`Progresso: ${processedPages}/${totalPages} páginas processadas`);
 
           return {
             cpf: cleanedCPF,
@@ -102,6 +131,9 @@ export const processS3File = async (
       }));
 
       results.push(...chunkResults);
+
+      // Pequeno delay entre chunks para permitir outras operações
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     return {

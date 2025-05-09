@@ -179,14 +179,27 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
     status.completedAt = updatedStatus.completedAt;
   }
 
-  // Gera ETag baseado no estado atual
+  // Se o processamento ainda estiver em andamento, sempre retorna o status atual
+  if (status.status === 'processing') {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Retry-After', RETRY_DELAY.toString());
+    res.json({
+      ...status,
+      maxTime: MAX_PROCESSING_TIME,
+      retryDelay: RETRY_DELAY,
+      maxRetries: MAX_RETRIES
+    });
+    return;
+  }
+
+  // Só verifica ETag e cache para status finalizados (completed ou error)
   const statusJson = JSON.stringify(status);
   const currentEtag = `"${Buffer.from(statusJson).toString('base64')}"`;
   const lastModified = status.lastUpdated || status.startedAt;
 
-  // Verifica se o conteúdo foi modificado
-  if (ifNoneMatch === currentEtag || 
-      (ifModifiedSince && new Date(ifModifiedSince) >= new Date(lastModified))) {
+  if ((status.status === 'completed' || status.status === 'error' || status.status === 'timeout') && 
+      (ifNoneMatch === currentEtag || 
+       (ifModifiedSince && new Date(ifModifiedSince) >= new Date(lastModified)))) {
     res.status(304).end();
     return;
   }
@@ -194,11 +207,7 @@ export const checkProcessingStatus = async (req: Request, res: Response): Promis
   // Define headers
   res.setHeader('ETag', currentEtag);
   res.setHeader('Last-Modified', lastModified);
-  res.setHeader('Cache-Control', status.status === 'processing' ? 'no-cache' : 'private, max-age=3600');
-  
-  if (status.status === 'processing') {
-    res.setHeader('Retry-After', RETRY_DELAY.toString());
-  }
+  res.setHeader('Cache-Control', 'private, max-age=3600');
 
   res.json({
     ...status,

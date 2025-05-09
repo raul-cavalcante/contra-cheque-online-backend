@@ -11,6 +11,7 @@ export type ExtendedRequest = Request & {
 export interface ProcessingStatus {
   status: 'processing' | 'completed' | 'error' | 'timeout';
   progress: number;
+  currentStep?: string;
   startedAt: string;
   lastUpdated?: string;
   completedAt?: string;
