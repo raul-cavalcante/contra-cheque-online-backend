@@ -17,14 +17,14 @@ export const processPayroll = async (req: Request, res: Response): Promise<void>
     if (!fileKey) {
       res.status(400).json({ error: 'fileKey é obrigatório' });
       return;
-    }
-
-    try {
+    }    try {
+      const processId = `process:${year}-${month}-${Date.now()}`;
       // Processar arquivo diretamente
-      const result = await processS3File(fileKey, year, month);
+      const result = await processS3File(processId, fileKey, year, month);
       
       res.status(200).json({
         message: 'Arquivo processado com sucesso',
+        processId,
         ...result
       });
     } catch (err) {
@@ -60,13 +60,13 @@ export const uploadPayroll = async (req: Request, res: Response): Promise<void> 
     try {
       // Upload do arquivo para o S3
       const fileKey = `uploads/${year}-${month}.pdf`;
-      await uploadToS3(file.buffer, fileKey, 'application/pdf');
-
-      // Processar o arquivo após o upload
-      const result = await processS3File(fileKey, Number(year), Number(month));
+      await uploadToS3(file.buffer, fileKey, 'application/pdf');      // Processar o arquivo após o upload
+      const processId = `process:${year}-${month}-${Date.now()}`;
+      const result = await processS3File(processId, fileKey, Number(year), Number(month));
       
       res.status(200).json({
         message: 'Arquivo processado com sucesso',
+        processId,
         ...result
       });
     } catch (err) {
