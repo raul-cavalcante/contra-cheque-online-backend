@@ -80,12 +80,15 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     
     // Inicia o status do processamento no KV
     const initialStatus: ProcessingStatus = {
+      jobId,
       status: 'processing',
       startedAt: now.toISOString(),
       progress: 0,
+      currentStep: 'Iniciando processamento',
       attempts: 0,
       maxAttempts: MAX_RETRIES,
-      timeoutAt: new Date(now.getTime() + MAX_PROCESSING_TIME * 1000).toISOString()
+      timeoutAt: new Date(now.getTime() + MAX_PROCESSING_TIME * 1000).toISOString(),
+      lastUpdated: now.toISOString()
     };
 
     await kv.set(jobId, initialStatus, { ex: MAX_PROCESSING_TIME });
@@ -94,20 +97,25 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
     res.status(202).json({
       message: 'Processamento iniciado',
       jobId,
-      status: 'processing',
-      retryAfter: RETRY_DELAY,
+      status: initialStatus.status,
+      progress: initialStatus.progress,
+      currentStep: initialStatus.currentStep,
+      retryDelay: RETRY_DELAY,
+      maxTime: MAX_PROCESSING_TIME,
       fileUrl: getPublicS3Url(fileKey)
     });
 
     // Processa em background
-    processS3File(fileKey, year, month, jobId)
+    processS3File(jobId, fileKey, year, month)
       .then(async result => {
         await kv.set(jobId, {
           ...initialStatus,
           status: 'completed',
           progress: 100,
+          currentStep: 'Processamento concluído',
           result,
-          completedAt: new Date().toISOString()
+          completedAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         }, { ex: 3600 }); // Guarda por 1h após completar
       })
       .catch(async error => {
@@ -117,19 +125,24 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
         if (status) {
           const attempts = (status.attempts || 0) + 1;
           if (attempts < MAX_RETRIES) {
+            console.log(`Tentativa ${attempts} de ${MAX_RETRIES} para o job ${jobId}`);
             await kv.set(jobId, {
               ...status,
               attempts,
-              lastUpdated: new Date().toISOString()
+              lastUpdated: new Date().toISOString(),
+              currentStep: `Tentativa ${attempts} de ${MAX_RETRIES}`
             });
             // Tenta novamente com o mesmo jobId
-            processS3File(fileKey, year, month, jobId);
+            processS3File(jobId, fileKey, year, month);
           } else {
+            console.log(`Job ${jobId} falhou após ${attempts} tentativas`);
             await kv.set(jobId, {
               ...status,
               status: 'error',
+              currentStep: 'Erro: número máximo de tentativas excedido',
               error: error.message,
-              completedAt: new Date().toISOString()
+              completedAt: new Date().toISOString(),
+              lastUpdated: new Date().toISOString()
             }, { ex: 3600 });
           }
         }
@@ -142,79 +155,74 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
 };
 
 export const checkProcessingStatus = async (req: Request, res: Response): Promise<void> => {
-  const { jobId } = req.params;
-  const ifNoneMatch = req.headers['if-none-match'];
-  const ifModifiedSince = req.headers['if-modified-since'];
-  
-  if (!jobId) {
-    res.status(400).json({ error: 'jobId é obrigatório' });
-    return;
+  try {
+    const { processId } = req.params;
+    if (!processId) {
+      res.status(400).json({ error: 'processId é obrigatório' });
+      return;
+    }
+
+    const status = await kv.get<ProcessingStatus>(processId);
+    if (!status) {
+      res.status(404).json({ error: 'Status não encontrado' });
+      return;
+    }
+
+    // Se o processamento ainda estiver em andamento
+    if (status.status === 'processing') {
+      // Verifica se o progresso está estagnado por mais de 15 segundos
+      const now = new Date();
+      const lastUpdate = status.lastUpdated ? new Date(status.lastUpdated) : new Date(status.startedAt);
+      const timeSinceLastUpdate = now.getTime() - lastUpdate.getTime();
+
+      console.log('Verificando progresso:', {
+        processId,
+        currentStep: status.currentStep,
+        currentProgress: status.progress,
+        lastUpdate: lastUpdate.toISOString(),
+        timeSinceLastUpdate
+      });
+
+      if (timeSinceLastUpdate > 15000) {
+        console.log('Detectado processamento paralisado:', {
+          processId,
+          lastUpdate: lastUpdate.toISOString(),
+          timeSinceLastUpdate
+        });
+
+        const errorStatus: ProcessingStatus = {
+          ...status,
+          status: 'error',
+          currentStep: 'Erro: processamento paralisado',
+          error: 'Processamento paralisado - sem progresso por mais de 15 segundos',
+          completedAt: now.toISOString(),
+          lastUpdated: now.toISOString()
+        };
+        await kv.set(processId, errorStatus, { ex: 3600 });
+        res.json(errorStatus);
+        return;
+      }
+
+      // Força o cliente a não usar cache durante o processamento
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.removeHeader('ETag'); // Remove o ETag para evitar 304
+      res.json({
+        ...status,
+        maxTime: MAX_PROCESSING_TIME,
+        retryDelay: RETRY_DELAY
+      });
+      return;
+    }
+
+    // Para status finalizados (completed ou error), permite cache
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.json(status);
+  } catch (error: any) {
+    console.error('Erro ao verificar status:', error);
+    res.status(500).json({ error: error.message });
   }
-
-  const status = await kv.get<ProcessingStatus>(jobId);
-  
-  if (!status) {
-    res.status(404).json({ 
-      error: 'Job não encontrado',
-      details: 'O status pode ter expirado ou o jobId está incorreto'
-    });
-    return;
-  }
-
-  // Verifica timeout
-  const now = new Date();
-  const timeoutAt = status.timeoutAt ? new Date(status.timeoutAt) : null;
-  
-  if (timeoutAt && now > timeoutAt && status.status === 'processing') {
-    const updatedStatus = {
-      ...status,
-      status: 'error' as const,
-      error: 'Tempo máximo de processamento excedido',
-      completedAt: now.toISOString()
-    };
-    
-    await kv.set(jobId, updatedStatus, { ex: 3600 });
-    status.status = 'error';
-    status.error = updatedStatus.error;
-    status.completedAt = updatedStatus.completedAt;
-  }
-
-  // Se o processamento ainda estiver em andamento, sempre retorna o status atual
-  if (status.status === 'processing') {
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Retry-After', RETRY_DELAY.toString());
-    res.json({
-      ...status,
-      maxTime: MAX_PROCESSING_TIME,
-      retryDelay: RETRY_DELAY,
-      maxRetries: MAX_RETRIES
-    });
-    return;
-  }
-
-  // Só verifica ETag e cache para status finalizados (completed ou error)
-  const statusJson = JSON.stringify(status);
-  const currentEtag = `"${Buffer.from(statusJson).toString('base64')}"`;
-  const lastModified = status.lastUpdated || status.startedAt;
-
-  if ((status.status === 'completed' || status.status === 'error' || status.status === 'timeout') && 
-      (ifNoneMatch === currentEtag || 
-       (ifModifiedSince && new Date(ifModifiedSince) >= new Date(lastModified)))) {
-    res.status(304).end();
-    return;
-  }
-
-  // Define headers
-  res.setHeader('ETag', currentEtag);
-  res.setHeader('Last-Modified', lastModified);
-  res.setHeader('Cache-Control', 'private, max-age=3600');
-
-  res.json({
-    ...status,
-    maxTime: MAX_PROCESSING_TIME,
-    retryDelay: RETRY_DELAY,
-    maxRetries: MAX_RETRIES
-  });
 };
 
 export const getPresignedDownloadUrl = async (req: Request, res: Response): Promise<void> => {
