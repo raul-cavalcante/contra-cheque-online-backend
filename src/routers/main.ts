@@ -28,14 +28,23 @@ mainRouter.put('/user', verifyToken, updatePassword);
 //Login do administrador/contador
 mainRouter.post('/login/admin', loginAdmin);
 
-//Upload de PDF/contra-cheques (requer autenticação de admin)
-mainRouter.post('/upload/payroll', authenticateAdmin, upload.single('file'), uploadPayroll);
-mainRouter.get('/upload/payroll/status/:jobId', authenticateAdmin, checkJobStatus);
-
-// Novas rotas para upload direto no S3 (para arquivos grandes)
+// Rotas de upload e processamento de contra-cheques
+// 1. Upload direto para S3 (recomendado para arquivos grandes)
 mainRouter.post('/presigned-url', authenticateAdmin, getPresignedUrl);
 mainRouter.post('/process-s3-upload', authenticateAdmin, processS3Upload);
 mainRouter.get('/process-s3-upload/status/:jobId', authenticateAdmin, checkProcessingStatus);
+
+// 2. Upload tradicional (deprecated, usar upload S3 para melhor performance)
+mainRouter.post('/upload/payroll', authenticateAdmin, upload.single('file'), uploadPayroll);
+mainRouter.get('/upload/payroll/status/:jobId', authenticateAdmin, checkJobStatus);
+
+// Para manter compatibilidade com clientes antigos
+mainRouter.get('/status/:jobId', authenticateAdmin, (req, res) => {
+  // Redireciona para a nova rota
+  const newUrl = `/process-s3-upload/status/${req.params.jobId}`;
+  console.log(`Redirecionando requisição antiga de /status para ${newUrl}`);
+  res.redirect(307, newUrl);
+});
 
 //admin master
 mainRouter.get('/master', authenticateAdmin, listAdminsController);
