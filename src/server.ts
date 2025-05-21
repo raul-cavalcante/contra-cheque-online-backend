@@ -19,8 +19,12 @@ const corsOptions = {
   allowedHeaders: [
     'Content-Type', 
     'Authorization',
-    'X-Requested-With'
+    'X-Requested-With',
+    'If-None-Match',
+    'If-Modified-Since',
+    'Cache-Control'
   ],
+  exposedHeaders: ['ETag'],
   credentials: true,
   maxAge: 86400
 };
@@ -40,12 +44,14 @@ server.use('/uploads', express.static(path.resolve(UPLOAD_DIR)));
 server.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'https://contra-cheque-online.vercel.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, If-None-Match, If-Modified-Since, Cache-Control');
+  res.header('Access-Control-Expose-Headers', 'ETag');
   res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
   
   // Handling preflight
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.sendStatus(204); // Usando 204 em vez de 200 para preflight
     return;
   }
   

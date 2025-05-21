@@ -156,11 +156,23 @@ export const processS3Upload = async (req: Request, res: Response): Promise<void
 
 export const checkProcessingStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { processId } = req.params;
-    if (!processId) {
-      res.status(400).json({ error: 'processId é obrigatório' });
+    const { jobId } = req.params;
+    if (!jobId) {
+      res.status(400).json({ error: 'jobId é obrigatório' });
       return;
     }
+
+    // Garantir que o jobId está no formato correto
+    if (!jobId.startsWith('process:')) {
+      console.log(`Formato de jobId inválido: ${jobId}. Adicionando prefixo 'process:'`);
+      const processId = `process:${jobId}`;
+      // Redireciona para a URL com o formato correto
+      const newUrl = `/process-s3-upload/status/${processId}`;
+      res.redirect(307, newUrl);
+      return;
+    }
+
+    const processId = jobId;
 
     const status = await kv.get<ProcessingStatus>(processId);
     if (!status) {
